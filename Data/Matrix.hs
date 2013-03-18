@@ -1,7 +1,9 @@
 
+-- | Matrix datatype an basic operations.
 module Data.Matrix (
     -- * Matrix type
     Matrix , prettyMatrix
+  , nrows , ncols
     -- * Builders
   , zero
   , identity
@@ -28,8 +30,8 @@ import qualified Data.Vector as V
 ---- MATRIX TYPE
 
 data Matrix a = M {
-   nrows :: !Int
- , ncols :: !Int
+   nrows :: !Int -- ^ Number of rows.
+ , ncols :: !Int -- ^ Number of columns.
  , mvect ::  V.Vector a
    } deriving Eq
 
@@ -156,7 +158,7 @@ submatrix :: Int    -- ^ Starting row
              -> Int -- ^ Ending column
           -> Matrix a
           -> Matrix a
-submatrix r1 r2 c1 c2 (M n m v) = M (r2-r1+1) m' $
+submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $
  mconcat [ V.slice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
   where
    m' = c2-c1+1
@@ -264,8 +266,8 @@ strassen a b = joinBlocks (c11,c12,c21,c22)
 first :: (a -> Bool) -> [a] -> a
 first f = go
  where
-  go [] = error "first: no element match the condition."
   go (x:xs) = if f x then x else go xs
+  go [] = error "first: no element match the condition."
 
 instance Num a => Num (Matrix a) where
  fromInteger = M 1 1 . V.singleton . fromInteger
@@ -281,14 +283,14 @@ instance Num a => Num (Matrix a) where
    | otherwise = M n m $ V.zipWith (+) v v'
  -- Multiplication of matrices.
  (M 1 1 v) * (M 1  1  v') = M 1 1 $ V.zipWith (*) v v'
- a1@(M n m v) * a2@(M n' m' v')
+ a1@(M n m _) * a2@(M n' m' _)
    -- Checking that sizes match...
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
    -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
    | otherwise =
        let mx = maximum [n,m,n',m']
-           n2  = first (>= mx) $ fmap (2^) [0..]
+           n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
            b1 = extendTo n2 n2 a1
            b2 = extendTo n2 n2 a2
        in  submatrix 1 n 1 m' $ strassen b1 b2
