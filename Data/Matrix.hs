@@ -20,6 +20,7 @@ module Data.Matrix (
   ) where
 
 import Data.Monoid
+import Control.DeepSeq
 import qualified Data.Vector as V
 
 -------------------------------------------------------
@@ -46,6 +47,9 @@ prettyMatrix m@(M _ _ v) = unlines
 
 instance Show a => Show (Matrix a) where
  show = prettyMatrix
+
+instance NFData a => NFData (Matrix a) where
+ rnf (M _ _ v) = rnf v
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -81,13 +85,21 @@ decode m k = (q+1,r+1)
 -------------------------------------------------------
 ---- BUILDERS
 
-zero :: Num a => Int -> Int -> Matrix a
+-- | The zero matrix of the given size.
+zero :: Num a =>
+     Int -- ^ Rows
+  -> Int -- ^ Columns
+  -> Matrix a
 zero n m = M n m $ V.replicate (n*m) 0
 
-matrix :: Int -> Int -> ((Int,Int) -> a) -> Matrix a
+-- | Generate a matrix from a generator function.
+matrix :: Int -- ^ Rows
+       -> Int -- ^ Columns
+       -> ((Int,Int) -> a) -- ^ Generator function
+       -> Matrix a
 matrix n m f = M n m $ V.generate (n*m) (f . decode m)
 
--- | Identity of the given order.
+-- | Identity matrix of the given order.
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
