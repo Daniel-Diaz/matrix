@@ -10,7 +10,7 @@ Stability: In development
 Bug-reports: https://github.com/Daniel-Diaz/matrix/issues
 Synopsis: A native implementation of matrix operations.
 Description:
- Matrix type and operations.
+ Matrix type and basic operations. Just a preliminary version without too many features.
 Cabal-version: >= 1.8
 
 Source-repository head
