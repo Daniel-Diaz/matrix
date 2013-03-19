@@ -8,6 +8,7 @@ module Data.Matrix (
   , zero
   , identity
   , matrix
+  , fromLists
     -- * Accessing
   , getElem , (!)
     -- * Manipulating matrices
@@ -104,6 +105,9 @@ matrix n m f = M n m $ V.generate (n*m) (f . decode m)
 -- | Identity matrix of the given order.
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
+
+fromLists :: [[a]] -> Matrix a
+fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList xss
 
 -------------------------------------------------------
 -------------------------------------------------------
