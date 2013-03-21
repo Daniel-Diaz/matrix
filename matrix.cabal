@@ -12,6 +12,9 @@ Synopsis: A native implementation of matrix operations.
 Description:
  Matrix type and basic operations. Just a preliminary version without too many features.
 Cabal-version: >= 1.8
+Extra-source-files:
+  -- Benchmarks
+  bench/mult.hs
 
 Source-repository head
   type: git
