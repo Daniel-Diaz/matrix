@@ -110,8 +110,33 @@ matrix n m f = M n m $ V.generate (n*m) (f . decode m)
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
+-- | Create a matrix from an non-empty list of non-empty lists.
+--   Each list must have the same number of elements.
 fromLists :: [[a]] -> Matrix a
 fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList xss
+
+-- | Permutation matrix.
+--
+-- > permMatrix n i j =
+-- >               i     j       n
+-- >   1 ( 1 0 ... 0 ... 0 ... 0 0 )
+-- >   2 ( 0 1 ... 0 ... 0 ... 0 0 )
+-- >     (     ...   ...   ...     )
+-- >   i ( 0 0 ... 0 ... 1 ... 0 0 )
+-- >     (     ...   ...   ...     )
+-- >   j ( 0 0 ... 1 ... 0 ... 0 0 )
+-- >     (     ...   ...   ...     )
+-- >     ( 0 0 ... 0 ... 0 ... 1 0 )
+-- >   n ( 0 0 ... 0 ... 0 ... 0 1 )
+--
+permMatrix :: Num a => Int -> Int -> Int -> Matrix a
+permMatrix n r1 r2 = matrix n n f
+ where
+  f (i,j)
+   | i == r1 = if j == r2 then 1 else 0
+   | i == r2 = if j == r1 then 1 else 0
+   | i == j = 1
+   | otherwise = 0
 
 -------------------------------------------------------
 -------------------------------------------------------
