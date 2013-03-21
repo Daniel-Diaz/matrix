@@ -20,6 +20,10 @@ module Data.Matrix (
     -- ** Joining blocks
   , (<|>) , (<->)
   , joinBlocks
+    -- * Matrix multiplication
+  , multStd
+  , multStrassen
+  , multStrassenMixed
   ) where
 
 import Data.Monoid
@@ -162,8 +166,8 @@ submatrix :: Int    -- ^ Starting row
              -> Int -- ^ Ending column
           -> Matrix a
           -> Matrix a
-submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $
- mconcat [ V.slice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
+submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $ V.force $
+ mconcat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
   where
    m' = c2-c1+1
 
@@ -200,7 +204,7 @@ joinBlocks :: (Matrix a,Matrix a
               ,Matrix a,Matrix a)
            ->  Matrix a
 joinBlocks (tl,tr,bl,br) = (tl <|> tr)
-                               <->     -- <-- How beautiful is this!
+                               <->
                            (bl <|> br)
 
 -- | Horizontally join two matrices. Visually:
@@ -232,15 +236,23 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 
 -------------------------------------------------------
 -------------------------------------------------------
----- FUNCTOR INSTANCE
+---- MATRIX MULTIPLICATION
 
-instance Functor Matrix where
- fmap f (M n m v) = M n m $ fmap f v
+-- | Standard matrix multiplication by definition.
+multStd :: Num a => Matrix a -> Matrix a -> Matrix a
+multStd a1@(M n m _) a2@(M n' m' _)
+   -- Checking that sizes match...
+   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
+                    ++ sizeStr n' m' ++ " matrices."
+   | otherwise = matrix n m' $ \(i,j) -> sum [ a1 ! (i,k) * a2 ! (k,j) | k <- [1 .. m] ]
 
--------------------------------------------------------
--------------------------------------------------------
----- NUMERICAL INSTANCE
+first :: (a -> Bool) -> [a] -> a
+first f = go
+ where
+  go (x:xs) = if f x then x else go xs
+  go [] = error "first: no element match the condition."
 
+-- | Strassen's algorithm over square matrices of order @2^n@.
 strassen :: Num a => Matrix a -> Matrix a -> Matrix a
 -- Trivial 1x1 multiplication.
 strassen (M 1 1 v) (M 1  1  v') = M 1 1 $ V.zipWith (*) v v'
@@ -267,11 +279,75 @@ strassen a b = joinBlocks (c11,c12,c21,c22)
   c21 = p2 + p4
   c22 = p1 - p2 + p3 + p6
 
-first :: (a -> Bool) -> [a] -> a
-first f = go
+-- | Strassen's matrix multiplication.
+multStrassen :: Num a => Matrix a -> Matrix a -> Matrix a
+multStrassen a1@(M n m _) a2@(M n' m' _)
+   -- Checking that sizes match...
+   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
+                    ++ sizeStr n' m' ++ " matrices."
+   -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
+   | otherwise =
+       let mx = maximum [n,m,n',m']
+           n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
+           b1 = extendTo n2 n2 a1
+           b2 = extendTo n2 n2 a2
+       in  submatrix 1 n 1 m' $ strassen b1 b2
+
+strmixFactor :: Int
+strmixFactor = 2^5 + 1
+
+-- | Strassen's algorithm over square matrices of order @2^n@.
+strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
+-- Trivial 1x1 multiplication.
+strassenMixed m1@(M n _ _) m2 | n < strmixFactor = multStd m1 m2
+-- General case guesses that the input matrices are square matrices
+-- whose order is a power of two.
+strassenMixed a b = joinBlocks (c11,c12,c21,c22)
  where
-  go (x:xs) = if f x then x else go xs
-  go [] = error "first: no element match the condition."
+  -- Size of the subproblem is halved.
+  n = div (nrows a) 2
+  -- Split of the original problem into smaller subproblems.
+  (a11,a12,a21,a22) = splitBlocks n n a
+  (b11,b12,b21,b22) = splitBlocks n n b
+  -- The seven Strassen's products.
+  p1 = strassenMixed (a11 + a22) (b11 + b22)
+  p2 = strassenMixed (a21 + a22)  b11
+  p3 = strassenMixed  a11        (b12 - b22)
+  p4 = strassenMixed        a22  (b21 - b11)
+  p5 = strassenMixed (a11 + a12)        b22
+  p6 = strassenMixed (a21 - a11) (b11 + b12)
+  p7 = strassenMixed (a12 - a22) (b21 + b22)
+  -- Merging blocks
+  c11 = p1 + p4 - p5 + p7
+  c12 = p3 + p5
+  c21 = p2 + p4
+  c22 = p1 - p2 + p3 + p6
+
+-- | Mixed Strassen's matrix multiplication.
+multStrassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
+multStrassenMixed a1@(M n m _) a2@(M n' m' _)
+   | n < strmixFactor = multStd a1 a2
+   -- Checking that sizes match...
+   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
+                    ++ sizeStr n' m' ++ " matrices."
+   -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
+   | otherwise =
+       let mx = maximum [n,m,n',m']
+           n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
+           b1 = extendTo n2 n2 a1
+           b2 = extendTo n2 n2 a2
+       in  submatrix 1 n 1 m' $ strassenMixed b1 b2
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- FUNCTOR INSTANCE
+
+instance Functor Matrix where
+ fmap f (M n m v) = M n m $ fmap f v
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- NUMERICAL INSTANCE
 
 instance Num a => Num (Matrix a) where
  fromInteger = M 1 1 . V.singleton . fromInteger
@@ -286,15 +362,4 @@ instance Num a => Num (Matrix a) where
    -- Otherwise, trivial zip.
    | otherwise = M n m $ V.zipWith (+) v v'
  -- Multiplication of matrices.
- (M 1 1 v) * (M 1  1  v') = M 1 1 $ V.zipWith (*) v v'
- a1@(M n m _) * a2@(M n' m' _)
-   -- Checking that sizes match...
-   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
-                    ++ sizeStr n' m' ++ " matrices."
-   -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
-   | otherwise =
-       let mx = maximum [n,m,n',m']
-           n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
-           b1 = extendTo n2 n2 a1
-           b2 = extendTo n2 n2 a2
-       in  submatrix 1 n 1 m' $ strassen b1 b2
+ (*) = multStrassenMixed

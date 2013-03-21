@@ -23,3 +23,12 @@ Library
                , deepseq
   Exposed-modules: Data.Matrix
   GHC-Options: -Wall
+
+Benchmark matrix-mult
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: mult.hs
+  build-depends: base ==4.*
+               , matrix
+               , criterion
+  ghc-options: -O2
