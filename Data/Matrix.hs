@@ -48,6 +48,7 @@ import Data.List (maximumBy)
 -------------------------------------------------------
 ---- MATRIX TYPE
 
+-- | Type of matrices.
 data Matrix a = M {
    nrows :: !Int -- ^ Number of rows.
  , ncols :: !Int -- ^ Number of columns.
@@ -159,7 +160,7 @@ permMatrix n r1 r2 = matrix n n f
 -------------------------------------------------------
 ---- ACCESSING
 
--- | Get an element of a matrix.
+-- | /O(1)/. Get an element of a matrix.
 getElem :: Int      -- ^ Row
         -> Int      -- ^ Column
         -> Matrix a -- ^ Matrix
@@ -185,7 +186,11 @@ getCol j a@(M n _ _) = V.generate n $ \i -> a ! (i,j)
 -------------------------------------------------------
 ---- MANIPULATING MATRICES
 
-setElem :: a -> (Int,Int) -> Matrix a -> Matrix a
+-- | /O(1)/. Replace the value of a cell in a matrix.
+setElem :: a -- ^ New value.
+        -> (Int,Int) -- ^ Position to replace.
+        -> Matrix a -- ^ Original matrix.
+        -> Matrix a -- ^ Matrix with the given position replaced with the given value.
 setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)) x) v
 
 -- | The transpose of a matrix.
@@ -212,7 +217,7 @@ extendTo n m a = a''
 -------------------------------------------------------
 ---- WORKING WITH BLOCKS
 
--- | Extract a submatrix.
+-- | Extract a submatrix creating a copy of a portion of the matrix.
 submatrix :: Int    -- ^ Starting row
              -> Int -- ^ Ending row
           -> Int    -- ^ Starting column
@@ -459,6 +464,21 @@ switchRows r1 r2 a@(M n m _) = matrix n m f
 
 -- LU DECOMPOSITION
 
+-- | Matrix LU decomposition with /partial pivoting/.
+--   The result is given in the format /(U,L,P)/ where:
+--
+--   * /U/ is an upper triangular matrix.
+--
+--   * /L/ is an /unit/ lower triangular matrix.
+--
+--   * /P/ is a permutation matrix.
+--
+--   * /PA = LU/.
+--
+--   These properties are only guaranteed when the input matrix is invertible.
+--   An additional property matches thanks to the strategy followed for pivoting:
+--
+--   * /L_(i,j)/ <= 1, for all /i,j/.
 luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a)
 luDecomp a = recLUDecomp a i i 1 n
  where
