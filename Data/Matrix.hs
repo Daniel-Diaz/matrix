@@ -5,14 +5,19 @@ module Data.Matrix (
     Matrix , prettyMatrix
   , nrows , ncols
     -- * Builders
-  , zero
-  , identity
   , matrix
   , fromLists
+    -- ** Special matrices
+  , zero
+  , identity
+  , permMatrix
     -- * Accessing
   , getElem , (!)
+  , getRow  , getCol
     -- * Manipulating matrices
+  , setElem
   , transpose , extendTo
+  , mapRow
     -- * Working with blocks
     -- ** Splitting blocks
   , submatrix
@@ -24,11 +29,20 @@ module Data.Matrix (
   , multStd
   , multStrassen
   , multStrassenMixed
+    -- * Linear transformations
+  , scaleMatrix
+  , scaleRow
+  , combineRows
+  , switchRows
+    -- * Decompositions
+  , luDecomp
   ) where
 
 import Data.Monoid
 import Control.DeepSeq
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as MV
+import Data.List (maximumBy)
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -111,7 +125,7 @@ identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
 -- | Create a matrix from an non-empty list of non-empty lists.
---   Each list must have the same number of elements.
+--   /Each list must have the same number of elements/.
 fromLists :: [[a]] -> Matrix a
 fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList xss
 
@@ -129,7 +143,10 @@ fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList x
 -- >     ( 0 0 ... 0 ... 0 ... 1 0 )
 -- >   n ( 0 0 ... 0 ... 0 ... 0 1 )
 --
+-- When @i == j@ it reduces to 'identity' @n@.
+--
 permMatrix :: Num a => Int -> Int -> Int -> Matrix a
+permMatrix n r1 r2 | r1 == r2 = identity n
 permMatrix n r1 r2 = matrix n n f
  where
   f (i,j)
@@ -152,13 +169,24 @@ getElem i j (M n m v)
                          ++ sizeStr n m ++ " matrix."
  | otherwise = v V.! encode m (i,j)
 
--- | Nice alias for 'getElem'.
+-- | Short alias for 'getElem'.
 (!) :: Matrix a -> (Int,Int) -> a
 m ! (i,j) = getElem i j m
+
+-- | Get a row of a matrix as a vector.
+getRow :: Int -> Matrix a -> V.Vector a
+getRow i a@(M _ m _) = V.generate m $ \j -> a ! (i,j)
+
+-- | Get a column of a matrix as a vector.
+getCol :: Int -> Matrix a -> V.Vector a
+getCol j a@(M n _ _) = V.generate n $ \i -> a ! (i,j)
 
 -------------------------------------------------------
 -------------------------------------------------------
 ---- MANIPULATING MATRICES
+
+setElem :: a -> (Int,Int) -> Matrix a -> Matrix a
+setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)) x) v
 
 -- | The transpose of a matrix.
 transpose :: Matrix a -> Matrix a
@@ -319,7 +347,7 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 2^5 + 1
+strmixFactor = 2^(5 :: Int) + 1
 
 -- | Strassen's algorithm over square matrices of order @2^n@.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -370,6 +398,14 @@ multStrassenMixed a1@(M n m _) a2@(M n' m' _)
 instance Functor Matrix where
  fmap f (M n m v) = M n m $ fmap f v
 
+-- | Map a function over a row.
+mapRow :: (Int -> a -> a) -- ^ Function takes the current column as additional argument.
+        -> Int            -- ^ Column to map.
+        -> Matrix a -> Matrix a
+mapRow f r (M n m v) =
+    M n m $ V.imap (\k x -> let (i,j) = decode m k
+                            in  if i == r then f j x else x) v
+
 -------------------------------------------------------
 -------------------------------------------------------
 ---- NUMERICAL INSTANCE
@@ -388,3 +424,69 @@ instance Num a => Num (Matrix a) where
    | otherwise = M n m $ V.zipWith (+) v v'
  -- Multiplication of matrices.
  (*) = multStrassenMixed
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- TRANSFORMATIONS
+
+-- | Scale a matrix by a given factor.
+scaleMatrix :: Num a => a -> Matrix a -> Matrix a
+scaleMatrix l = fmap (*l)
+
+-- | Scale a row by a given factor.
+scaleRow :: Num a => a -> Int -> Matrix a -> Matrix a
+scaleRow l r = mapRow (const (l*)) r
+
+-- | Add to one row a scalar multiple of other row.
+combineRows :: Num a => Int -> a -> Int -> Matrix a -> Matrix a
+combineRows r1 l r2 m = mapRow (\j x -> x + l * getElem r2 j m) r1 m
+
+-- | Switch two rows of a matrix.
+switchRows :: Int -- ^ Row 1.
+           -> Int -- ^ Row 2.
+           -> Matrix a -- ^ Original matrix.
+           -> Matrix a -- ^ Matrix with rows 1 and 2 switched.
+switchRows r1 r2 a@(M n m _) = matrix n m f
+ where
+  f (i,j)
+   | i == r1   = a ! (r2,j)
+   | i == r2   = a ! (r1,j)
+   | otherwise = a ! ( i,j)
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- DECOMPOSITIONS
+
+-- LU DECOMPOSITION
+
+luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a)
+luDecomp a = recLUDecomp a i i 1 n
+ where
+  n = nrows a
+  i = identity n
+
+recLUDecomp ::  (Ord a, Fractional a)
+            =>  Matrix a -- ^ U
+            ->  Matrix a -- ^ L
+            ->  Matrix a -- ^ P
+            ->  Int      -- ^ Current row
+            ->  Int      -- ^ Total rows
+            -> (Matrix a,Matrix a,Matrix a)
+recLUDecomp u l p k n =
+    if k == n then (u,l,p)
+              else recLUDecomp u'' l'' p' (k+1) n
+ where
+  i  = maximumBy (\x y -> compare (abs $ u ! (x,k)) (abs $ u ! (y,k))) [ k .. n ]
+  u' = switchRows k i u
+  l' = M n n $
+       V.modify (\mv -> mapM_ (\j -> do
+         MV.write mv (encode n (i,j)) $ l ! (k,j)
+         MV.write mv (encode n (k,j)) $ l ! (i,j) 
+           ) [1 .. k-1] ) $ mvect l
+  p' = switchRows k i p
+  (u'',l'') = go u' l' (k+1)
+  ukk = u' ! (k,k)
+  go u_ l_ j =
+    if j > n then (u_,l_)
+             else let x = (u_ ! (j,k)) / ukk
+                  in  go (combineRows j (-x) k u_) (setElem x (j,k) l_) (j+1)
