@@ -1,5 +1,5 @@
 
--- | Matrix datatype an basic operations.
+-- | Matrix datatype and operations.
 module Data.Matrix (
     -- * Matrix type
     Matrix , prettyMatrix
@@ -14,13 +14,15 @@ module Data.Matrix (
     -- * Accessing
   , getElem , (!)
   , getRow  , getCol
+  , getDiag
     -- * Manipulating matrices
   , setElem
   , transpose , extendTo
   , mapRow
-    -- * Working with blocks
+    -- * Submatrices
     -- ** Splitting blocks
   , submatrix
+  , minorMatrix
   , splitBlocks
     -- ** Joining blocks
   , (<|>) , (<->)
@@ -36,6 +38,11 @@ module Data.Matrix (
   , switchRows
     -- * Decompositions
   , luDecomp
+    -- * Properties
+  , trace , diagProd
+    -- ** Determinants
+  , detLaplace
+  , detLU
   ) where
 
 import Data.Monoid
@@ -182,6 +189,12 @@ getRow i a@(M _ m _) = V.generate m $ \j -> a ! (i,j)
 getCol :: Int -> Matrix a -> V.Vector a
 getCol j a@(M n _ _) = V.generate n $ \i -> a ! (i,j)
 
+-- | Diagonal of a /not necessarily square/ matrix.
+getDiag :: Matrix a -> V.Vector a
+getDiag m = V.generate k $ \i -> m ! (i+1,i+1)
+ where
+  k = min (nrows m) (ncols m)
+
 -------------------------------------------------------
 -------------------------------------------------------
 ---- MANIPULATING MATRICES
@@ -228,6 +241,15 @@ submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $ V.force $
  mconcat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
   where
    m' = c2-c1+1
+
+-- | Remove a row and a column from a matrix.
+minorMatrix :: Int -- ^ Row @r@ to remove.
+            -> Int -- ^ Column @c@ to remove.
+            -> Matrix a -- ^ Original matrix.
+            -> Matrix a -- ^ Matrix with row @r@ and column @c@ removed.
+minorMatrix r c (M n m v) = M (n-1) (m-1) $
+    V.ifilter (\k _ -> let (i,j) = decode m k
+                       in  i /= r && j /= c ) v
 
 -- | Make a block-partition of a matrix using a given element as reference.
 --   The element will stay in the bottom-right corner of the top-left corner matrix.
@@ -465,7 +487,7 @@ switchRows r1 r2 a@(M n m _) = matrix n m f
 -- LU DECOMPOSITION
 
 -- | Matrix LU decomposition with /partial pivoting/.
---   The result is given in the format /(U,L,P)/ where:
+--   The result for a matrix /M/ is given in the format /(U,L,P,d)/ where:
 --
 --   * /U/ is an upper triangular matrix.
 --
@@ -473,14 +495,19 @@ switchRows r1 r2 a@(M n m _) = matrix n m f
 --
 --   * /P/ is a permutation matrix.
 --
---   * /PA = LU/.
+--   * /d/ is the determinant of /P/.
+--
+--   * /PM = LU/.
 --
 --   These properties are only guaranteed when the input matrix is invertible.
 --   An additional property matches thanks to the strategy followed for pivoting:
 --
 --   * /L_(i,j)/ <= 1, for all /i,j/.
-luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a)
-luDecomp a = recLUDecomp a i i 1 n
+--
+--   This follows from the maximal property of the selected pivots, which also
+--   leads to a better numerical stability.
+luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
+luDecomp a = recLUDecomp a i i 1 1 n
  where
   n = nrows a
   i = identity n
@@ -489,14 +516,17 @@ recLUDecomp ::  (Ord a, Fractional a)
             =>  Matrix a -- ^ U
             ->  Matrix a -- ^ L
             ->  Matrix a -- ^ P
+            ->  a        -- ^ d
             ->  Int      -- ^ Current row
             ->  Int      -- ^ Total rows
-            -> (Matrix a,Matrix a,Matrix a)
-recLUDecomp u l p k n =
-    if k == n then (u,l,p)
-              else recLUDecomp u'' l'' p' (k+1) n
+            -> (Matrix a,Matrix a,Matrix a,a)
+recLUDecomp u l p d k n =
+    if k == n then (u,l,p,d)
+              else recLUDecomp u'' l'' p' d' (k+1) n
  where
+  -- Pivot strategy: maximum value in absolute value below the current row.
   i  = maximumBy (\x y -> compare (abs $ u ! (x,k)) (abs $ u ! (y,k))) [ k .. n ]
+  -- Switching to place pivot in current row.
   u' = switchRows k i u
   l' = M n n $
        V.modify (\mv -> mapM_ (\j -> do
@@ -504,9 +534,40 @@ recLUDecomp u l p k n =
          MV.write mv (encode n (k,j)) $ l ! (i,j) 
            ) [1 .. k-1] ) $ mvect l
   p' = switchRows k i p
+  -- Permutation determinant
+  d' = if i == k then d else negate d
+  -- Cancel elements below the pivot.
   (u'',l'') = go u' l' (k+1)
   ukk = u' ! (k,k)
   go u_ l_ j =
     if j > n then (u_,l_)
              else let x = (u_ ! (j,k)) / ukk
                   in  go (combineRows j (-x) k u_) (setElem x (j,k) l_) (j+1)
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- PROPERTIES
+
+-- | Sum of the elements in the diagonal. See also 'getDiag'.
+trace :: Num a => Matrix a -> a
+trace = V.sum . getDiag
+
+-- | Product of the elements in the diagonal. See also 'getDiag'.
+diagProd :: Num a => Matrix a -> a
+diagProd = V.product . getDiag
+
+-- DETERMINANT
+
+-- | Matrix determinant using Laplace expansion.
+--   If the elements of the 'Matrix' are instance of 'Ord' and 'Fractional'
+--   consider to use 'detLU' in order to obtain better performance.
+detLaplace :: Num a => Matrix a -> a
+detLaplace (M 1 1 v) = V.head v
+detLaplace m =
+    sum [ (-1)^(i-1) * m ! (i,1) * detLaplace (minorMatrix i 1 m) | i <- [1 .. nrows m] ]
+
+-- | Matrix determinant using LU decomposition.
+detLU :: (Ord a, Fractional a) => Matrix a -> a
+detLU m = d * diagProd u
+ where
+  (u,_,_,d) = luDecomp m
