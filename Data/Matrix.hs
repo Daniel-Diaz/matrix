@@ -4,9 +4,12 @@ module Data.Matrix (
     -- * Matrix type
     Matrix , prettyMatrix
   , nrows , ncols
+  , forceMatrix
     -- * Builders
   , matrix
   , fromLists
+  , rowVector
+  , colVector
     -- ** Special matrices
   , zero
   , identity
@@ -80,6 +83,12 @@ instance Show a => Show (Matrix a) where
 instance NFData a => NFData (Matrix a) where
  rnf (M _ _ v) = rnf v
 
+-- | /O(rows*cols)/. Similar to 'V.force', drop any extra memory.
+--
+--   Useful when using 'submatrix' from a big matrix.
+forceMatrix :: Matrix a -> Matrix a
+forceMatrix (M n m v) = M n m $ V.force v
+
 -------------------------------------------------------
 -------------------------------------------------------
 ---- ENCODING/DECODING
@@ -129,13 +138,36 @@ matrix :: Int -- ^ Rows
 matrix n m f = M n m $ V.generate (n*m) (f . decode m)
 
 -- | Identity matrix of the given order.
+--
+-- > identity n =
+-- >                 n
+-- >   1 ( 1 0 ... 0 0 )
+-- >   2 ( 0 1 ... 0 0 )
+-- >     (     ...     )
+-- >     ( 0 0 ... 1 0 )
+-- >   n ( 0 0 ... 0 1 )
+--
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
 -- | Create a matrix from an non-empty list of non-empty lists.
 --   /Each list must have the same number of elements/.
+--   For example:
+--
+-- > fromLists [ [1,2,3]      ( 1 2 3 )
+-- >           , [4,5,6]      ( 4 5 6 )
+-- >           , [7,8,9] ] =  ( 7 8 9 )
+--
 fromLists :: [[a]] -> Matrix a
 fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList xss
+
+-- | /O(1)/. Represent a vector as a one row matrix.
+rowVector :: V.Vector a -> Matrix a
+rowVector v = M 1 (V.length v) v
+
+-- | /O(1)/. Represent a vector as a one column matrix.
+colVector :: V.Vector a -> Matrix a
+colVector v = M (V.length v) 1 v
 
 -- | Permutation matrix.
 --
@@ -181,15 +213,17 @@ getElem i j (M n m v)
 (!) :: Matrix a -> (Int,Int) -> a
 m ! (i,j) = getElem i j m
 
--- | Get a row of a matrix as a vector.
+-- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
-getRow i a@(M _ m _) = V.generate m $ \j -> a ! (i,j)
+getRow i m = V.slice (encode k (i,1)) k $ mvect m
+ where
+  k = ncols m
 
--- | Get a column of a matrix as a vector.
+-- | /O(rows)/. Get a column of a matrix as a vector.
 getCol :: Int -> Matrix a -> V.Vector a
-getCol j a@(M n _ _) = V.generate n $ \i -> a ! (i,j)
+getCol j a@(M n _ _) = V.generate n $ \i -> a ! (i+1,j)
 
--- | Diagonal of a /not necessarily square/ matrix.
+-- | /O(min rows cols)/. Diagonal of a /not necessarily square/ matrix.
 getDiag :: Matrix a -> V.Vector a
 getDiag m = V.generate k $ \i -> m ! (i+1,i+1)
  where
@@ -206,7 +240,7 @@ setElem :: a -- ^ New value.
         -> Matrix a -- ^ Matrix with the given position replaced with the given value.
 setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)) x) v
 
--- | The transpose of a matrix.
+-- | /O(rows*cols)/. The transpose of a matrix.
 transpose :: Matrix a -> Matrix a
 transpose (M n m v) = M m n $ V.backpermute v $
  fmap (\k -> let (q,r) = quotRem k n
@@ -230,14 +264,14 @@ extendTo n m a = a''
 -------------------------------------------------------
 ---- WORKING WITH BLOCKS
 
--- | Extract a submatrix creating a copy of a portion of the matrix.
+-- | Extract a submatrix given row and column limits.
 submatrix :: Int    -- ^ Starting row
              -> Int -- ^ Ending row
           -> Int    -- ^ Starting column
              -> Int -- ^ Ending column
           -> Matrix a
           -> Matrix a
-submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $ V.force $
+submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $
  mconcat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
   where
    m' = c2-c1+1
@@ -427,7 +461,7 @@ instance Functor Matrix where
 
 -- | Map a function over a row.
 mapRow :: (Int -> a -> a) -- ^ Function takes the current column as additional argument.
-        -> Int            -- ^ Column to map.
+        -> Int            -- ^ Row to map.
         -> Matrix a -> Matrix a
 mapRow f r (M n m v) =
     M n m $ V.imap (\k x -> let (i,j) = decode m k
@@ -505,7 +539,7 @@ switchRows r1 r2 a@(M n m _) = matrix n m f
 --   * /L_(i,j)/ <= 1, for all /i,j/.
 --
 --   This follows from the maximal property of the selected pivots, which also
---   leads to a better numerical stability.
+--   leads to a better numerical stability of the algorithm.
 luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
