@@ -10,7 +10,13 @@ Stability: In development
 Bug-reports: https://github.com/Daniel-Diaz/matrix/issues
 Synopsis: A native implementation of matrix operations.
 Description:
- Matrix type and basic operations. Just a preliminary version without too many features.
+  Matrix library. Basic operations and some algorithms.
+  .
+  To get the library update your cabal package list (if needed) with @cabal update@ and
+  then use @cabal install matrix@, assuming that you already have Cabal installed.
+  .
+  If you want to use GSL, BLAS and LAPACK, @hmatrix@ (<http://hackage.haskell.org/package/hmatrix>)
+  is the way to go.
 Cabal-version: >= 1.8
 Extra-source-files:
   -- Benchmarks

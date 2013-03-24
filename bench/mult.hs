@@ -22,4 +22,4 @@ bmat n = bgroup ("mult" ++ show n)
  ]
 
 main :: IO ()
-main = defaultMain $ fmap bmat [8,10,20,100,250,500]
+main = defaultMain $ fmap bmat [10,25,100,250,500]

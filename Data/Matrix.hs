@@ -75,7 +75,7 @@ data Matrix a = M {
 sizeStr :: Int -> Int -> String
 sizeStr n m = show n ++ "x" ++ show m
 
--- | Display a matrix as a 'String'.
+-- | Display a matrix as a 'String' using the 'Show' instance of its elements.
 prettyMatrix :: Show a => Matrix a -> String
 prettyMatrix m@(M _ _ v) = unlines
  [ "( " <> unwords (fmap (\j -> fill mx $ show $ m ! (i,j)) [1..ncols m]) <> " )" | i <- [1..nrows m] ]
@@ -488,8 +488,7 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 100
--- 239
+strmixFactor = 150
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -541,6 +540,12 @@ instance Functor Matrix where
  fmap f (M n m v) = M n m $ fmap f v
 
 -- | Map a function over a row.
+--   Example:
+--
+-- >                          ( 1 2 3 )   ( 1 2 3 )
+-- >                          ( 4 5 6 )   ( 5 6 7 )
+-- > mapRow (\_ x -> x + 1) 2 ( 7 8 9 ) = ( 7 8 9 )
+--
 mapRow :: (Int -> a -> a) -- ^ Function takes the current column as additional argument.
         -> Int            -- ^ Row to map.
         -> Matrix a -> Matrix a
@@ -572,18 +577,38 @@ instance Num a => Num (Matrix a) where
 ---- TRANSFORMATIONS
 
 -- | Scale a matrix by a given factor.
+--   Example:
+--
+-- >               ( 1 2 3 )   (  2  4  6 )
+-- >               ( 4 5 6 )   (  8 10 12 )
+-- > scaleMatrix 2 ( 7 8 9 ) = ( 14 16 18 )
 scaleMatrix :: Num a => a -> Matrix a -> Matrix a
-scaleMatrix l = fmap (*l)
+scaleMatrix = fmap . (*)
 
 -- | Scale a row by a given factor.
+--   Example:
+--
+-- >              ( 1 2 3 )   (  1  2  3 )
+-- >              ( 4 5 6 )   (  8 10 12 )
+-- > scaleRow 2 2 ( 7 8 9 ) = (  7  8  9 )
 scaleRow :: Num a => a -> Int -> Matrix a -> Matrix a
-scaleRow l r = mapRow (const (l*)) r
+scaleRow = mapRow . const . (*)
 
 -- | Add to one row a scalar multiple of other row.
+--   Example:
+--
+-- >                   ( 1 2 3 )   (  1  2  3 )
+-- >                   ( 4 5 6 )   (  6  9 12 )
+-- > combineRows 2 2 1 ( 7 8 9 ) = (  7  8  9 )
 combineRows :: Num a => Int -> a -> Int -> Matrix a -> Matrix a
 combineRows r1 l r2 m = mapRow (\j x -> x + l * getElem r2 j m) r1 m
 
 -- | Switch two rows of a matrix.
+--   Example:
+--
+-- >                ( 1 2 3 )   ( 4 5 6 )
+-- >                ( 4 5 6 )   ( 1 2 3 )
+-- > switchRows 1 2 ( 7 8 9 ) = ( 7 8 9 )
 switchRows :: Int -- ^ Row 1.
            -> Int -- ^ Row 2.
            -> Matrix a -- ^ Original matrix.
@@ -621,6 +646,12 @@ switchRows r1 r2 a@(M n m _) = matrix n m f
 --
 --   This follows from the maximal property of the selected pivots, which also
 --   leads to a better numerical stability of the algorithm.
+--   
+--   Example:
+--
+-- >          ( 1 2 0 )     ( 2 0  2 )   (   1 0 0 )   ( 0 0 1 )
+-- >          ( 0 2 1 )     ( 0 2 -1 )   ( 1/2 1 0 )   ( 1 0 0 )
+-- > luDecomp ( 2 0 2 ) = ( ( 0 0  2 ) , (   0 1 1 ) , ( 0 1 0 ) , 1 )
 luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
@@ -664,10 +695,20 @@ recLUDecomp u l p d k n =
 ---- PROPERTIES
 
 -- | Sum of the elements in the diagonal. See also 'getDiag'.
+--   Example:
+--
+-- >       ( 1 2 3 )
+-- >       ( 4 5 6 )
+-- > trace ( 7 8 9 ) = 15
 trace :: Num a => Matrix a -> a
 trace = V.sum . getDiag
 
 -- | Product of the elements in the diagonal. See also 'getDiag'.
+--   Example:
+--
+-- >          ( 1 2 3 )
+-- >          ( 4 5 6 )
+-- > diagProd ( 7 8 9 ) = 45
 diagProd :: Num a => Matrix a -> a
 diagProd = V.product . getDiag
 
