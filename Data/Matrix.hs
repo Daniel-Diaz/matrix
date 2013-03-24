@@ -1,5 +1,7 @@
 
 -- | Matrix datatype and operations.
+--
+--   Every provided example has been tested.
 module Data.Matrix (
     -- * Matrix type
     Matrix , prettyMatrix
@@ -31,6 +33,10 @@ module Data.Matrix (
   , (<|>) , (<->)
   , joinBlocks
     -- * Matrix multiplication
+    -- ** About matrix multiplication
+    -- $mult
+
+    -- ** Functions
   , multStd
   , multStrassen
   , multStrassenMixed
@@ -124,6 +130,14 @@ decode m k = (q+1,r+1)
 ---- BUILDERS
 
 -- | The zero matrix of the given size.
+--
+-- > zero n m =
+-- >                 n
+-- >   1 ( 0 0 ... 0 0 )
+-- >   2 ( 0 0 ... 0 0 )
+-- >     (     ...     )
+-- >     ( 0 0 ... 0 0 )
+-- >   n ( 0 0 ... 0 0 )
 zero :: Num a =>
      Int -- ^ Rows
   -> Int -- ^ Columns
@@ -131,6 +145,12 @@ zero :: Num a =>
 zero n m = M n m $ V.replicate (n*m) 0
 
 -- | Generate a matrix from a generator function.
+--   Example of usage:
+--
+-- >                                  (  1  0 -1 -2 )
+-- >                                  (  3  2  1  0 )
+-- >                                  (  5  4  3  2 )
+-- > matrix 4 4 $ \(i,j) -> 2*i - j = (  7  6  5  4 )
 matrix :: Int -- ^ Rows
        -> Int -- ^ Columns
        -> ((Int,Int) -> a) -- ^ Generator function
@@ -185,7 +205,11 @@ colVector v = M (V.length v) 1 v
 --
 -- When @i == j@ it reduces to 'identity' @n@.
 --
-permMatrix :: Num a => Int -> Int -> Int -> Matrix a
+permMatrix :: Num a
+           => Int -- ^ Size of the matrix.
+           -> Int -- ^ Permuted row 1.
+           -> Int -- ^ Permuted row 2.
+           -> Matrix a -- ^ Permutation matrix.
 permMatrix n r1 r2 | r1 == r2 = identity n
 permMatrix n r1 r2 = matrix n n f
  where
@@ -241,6 +265,11 @@ setElem :: a -- ^ New value.
 setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)) x) v
 
 -- | /O(rows*cols)/. The transpose of a matrix.
+--   Example:
+--
+-- >           ( 1 2 3 )   ( 1 4 7 )
+-- >           ( 4 5 6 )   ( 2 5 8 )
+-- > transpose ( 7 8 9 ) = ( 3 6 9 )
 transpose :: Matrix a -> Matrix a
 transpose (M n m v) = M m n $ V.backpermute v $
  fmap (\k -> let (q,r) = quotRem k n
@@ -249,6 +278,13 @@ transpose (M n m v) = M m n $ V.backpermute v $
 
 -- | Extend a matrix to a given size adding zeroes.
 --   If the matrix already has the required size, nothing happens.
+--   The matrix is /never/ reduced in size.
+--   Example:
+--
+-- >                          ( 1 2 3 0 0 )
+-- >              ( 1 2 3 )   ( 4 5 6 0 0 )
+-- >              ( 4 5 6 )   ( 7 8 9 0 0 )
+-- > extendTo 4 5 ( 7 8 9 ) = ( 0 0 0 0 0 )
 extendTo :: Num a
          => Int -- ^ Minimal number of rows.
          -> Int -- ^ Minimal number of columns.
@@ -265,18 +301,29 @@ extendTo n m a = a''
 ---- WORKING WITH BLOCKS
 
 -- | Extract a submatrix given row and column limits.
+--   Example:
+--
+-- >                   ( 1 2 3 )
+-- >                   ( 4 5 6 )   ( 2 3 )
+-- > submatrix 1 2 2 3 ( 7 8 9 ) = ( 5 6 )
 submatrix :: Int    -- ^ Starting row
              -> Int -- ^ Ending row
           -> Int    -- ^ Starting column
              -> Int -- ^ Ending column
           -> Matrix a
           -> Matrix a
+{-# INLINE submatrix #-}
 submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $
- mconcat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
+ V.concat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
   where
    m' = c2-c1+1
 
 -- | Remove a row and a column from a matrix.
+--   Example:
+--
+-- >                 ( 1 2 3 )
+-- >                 ( 4 5 6 )   ( 1 3 )
+-- > minorMatrix 2 2 ( 7 8 9 ) = ( 7 9 )
 minorMatrix :: Int -- ^ Row @r@ to remove.
             -> Int -- ^ Column @c@ to remove.
             -> Matrix a -- ^ Original matrix.
@@ -310,6 +357,7 @@ splitBlocks :: Int      -- ^ Row of the splitting element.
             -> Matrix a -- ^ Matrix to split.
             -> (Matrix a,Matrix a
                ,Matrix a,Matrix a) -- ^ (TL,TR,BL,BR)
+{-# INLINE splitBlocks #-}
 splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1) m a
                               , submatrix (i+1) n 1 j a , submatrix (i+1) n (j+1) m a )
 
@@ -317,6 +365,7 @@ splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1
 joinBlocks :: (Matrix a,Matrix a
               ,Matrix a,Matrix a)
            ->  Matrix a
+{-# INLINE joinBlocks #-}
 joinBlocks (tl,tr,bl,br) = (tl <|> tr)
                                <->
                            (bl <|> br)
@@ -327,12 +376,13 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 --
 -- Where both matrices /A/ and /B/ have the same number of rows.
 (<|>) :: Matrix a -> Matrix a -> Matrix a
+{-# INLINE (<|>) #-}
 (M n m v) <|> (M n' m' v')
  | n /= n' = error $ "Horizontal join of " ++ sizeStr n m ++ " and "
                   ++ sizeStr n' m' ++ " matrices."
- | otherwise = let v'' = mconcat [ V.slice (encode m  (r,1)) m  v
-                                <> V.slice (encode m' (r,1)) m' v'
-                                    | r <- [1..n] ]
+ | otherwise = let v'' = V.concat [ V.slice (encode m  (r,1)) m  v
+                                 <> V.slice (encode m' (r,1)) m' v'
+                                     | r <- [1..n] ]
                in  M n (m+m') v''
 
 -- | Vertically join two matrices. Visually:
@@ -343,14 +393,42 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 --
 -- Where both matrices /A/ and /B/ have the same number of columns.
 (<->) :: Matrix a -> Matrix a -> Matrix a
+{-# INLINE (<->) #-}
 (M n m v) <-> (M n' m' v')
  | m /= m' = error $ "Vertical join of " ++ sizeStr n m ++ " and "
                   ++ sizeStr n' m' ++ " matrices."
- | otherwise = M (n+n') m $ v <> v'
+ | otherwise = M (n+n') m $ v V.++ v'
 
 -------------------------------------------------------
 -------------------------------------------------------
 ---- MATRIX MULTIPLICATION
+
+{- $mult
+
+Three methods are provided for matrix multiplication.
+
+* 'multStd':
+     Matrix multiplication following directly the definition.
+     This is the best choice when you know for sure that your
+     matrices are small.
+
+* 'multStrassen':
+     Matrix multiplication following the Strassen's algorithm.
+     Complexity grows slower but also some work is added
+     partitioning the matrix. Also, it only works on square
+     matrices of order @2^n@, so if this condition is not
+     met, it is zero-padded until this is accomplished.
+     Therefore, its use it is not recommended.
+
+* 'multStrassenMixed':
+     This function mixes the 'multStd' and 'multStrassen' methods.
+     It provides a better performance in general. Method @(@'*'@)@
+     of the 'Num' class uses this function because it gives the best
+     average performance. However, if you know for sure that your matrices are
+     small, you should use 'multStd' instead, since
+     'multStrassenMixed' is going to switch to that function anyway.
+
+-}
 
 -- | Standard matrix multiplication by definition.
 multStd :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -358,7 +436,11 @@ multStd a1@(M n m _) a2@(M n' m' _)
    -- Checking that sizes match...
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
-   | otherwise = matrix n m' $ \(i,j) -> sum [ a1 ! (i,k) * a2 ! (k,j) | k <- [1 .. m] ]
+   | otherwise = multStd_ a1 a2
+
+-- | Standard matrix multiplication by definition, without checking if sizes match.
+multStd_ :: Num a => Matrix a -> Matrix a -> Matrix a
+multStd_ a1@(M n m _) a2@(M _ m' _) = matrix n m' $ \(i,j) -> sum [ a1 ! (i,k) * a2 ! (k,j) | k <- [1 .. m] ]
 
 first :: (a -> Bool) -> [a] -> a
 first f = go
@@ -396,10 +478,8 @@ strassen a b = joinBlocks (c11,c12,c21,c22)
 -- | Strassen's matrix multiplication.
 multStrassen :: Num a => Matrix a -> Matrix a -> Matrix a
 multStrassen a1@(M n m _) a2@(M n' m' _)
-   -- Checking that sizes match...
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
-   -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
@@ -408,18 +488,21 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 2^(5 :: Int) + 1
+strmixFactor = 100
+-- 239
 
--- | Strassen's algorithm over square matrices of order @2^n@.
+-- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
--- Trivial 1x1 multiplication.
-strassenMixed m1@(M n _ _) m2 | n < strmixFactor = multStd m1 m2
--- General case guesses that the input matrices are square matrices
--- whose order is a power of two.
-strassenMixed a b = joinBlocks (c11,c12,c21,c22)
+strassenMixed a@(M r _ _) b
+ | r < strmixFactor = multStd_ a b
+ | odd r = let r' = r + 1
+               a' = extendTo r' r' a
+               b' = extendTo r' r' b
+           in  submatrix 1 r 1 r $ strassenMixed a' b'
+ | otherwise = joinBlocks (c11,c12,c21,c22)
  where
   -- Size of the subproblem is halved.
-  n = div (nrows a) 2
+  n = quot r 2
   -- Split of the original problem into smaller subproblems.
   (a11,a12,a21,a22) = splitBlocks n n a
   (b11,b12,b21,b22) = splitBlocks n n b
@@ -440,14 +523,12 @@ strassenMixed a b = joinBlocks (c11,c12,c21,c22)
 -- | Mixed Strassen's matrix multiplication.
 multStrassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
 multStrassenMixed a1@(M n m _) a2@(M n' m' _)
-   | n < strmixFactor = multStd a1 a2
-   -- Checking that sizes match...
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
-   -- Otherwise, Strassen's Subcubic Matrix Multiplication Algorithm.
+   | n < strmixFactor = multStd_ a1 a2
    | otherwise =
        let mx = maximum [n,m,n',m']
-           n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
+           n2 = if even mx then mx else mx+1
            b1 = extendTo n2 n2 a1
            b2 = extendTo n2 n2 a2
        in  submatrix 1 n 1 m' $ strassenMixed b1 b2
