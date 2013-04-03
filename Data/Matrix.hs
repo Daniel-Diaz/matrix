@@ -9,7 +9,7 @@ module Data.Matrix (
   , forceMatrix
     -- * Builders
   , matrix
-  , fromLists
+  , fromList , fromLists
   , rowVector
   , colVector
     -- ** Special matrices
@@ -58,6 +58,7 @@ import Data.Monoid
 import Control.DeepSeq
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
+import Control.Monad.Primitive (PrimMonad,PrimState)
 import Data.List (maximumBy)
 
 -------------------------------------------------------
@@ -68,7 +69,7 @@ import Data.List (maximumBy)
 data Matrix a = M {
    nrows :: !Int -- ^ Number of rows.
  , ncols :: !Int -- ^ Number of columns.
- , mvect ::  V.Vector a
+ , mvect ::  V.Vector (V.Vector a)
    } deriving Eq
 
 -- | Just a cool way to output the size of a matrix.
@@ -80,7 +81,7 @@ prettyMatrix :: Show a => Matrix a -> String
 prettyMatrix m@(M _ _ v) = unlines
  [ "( " <> unwords (fmap (\j -> fill mx $ show $ m ! (i,j)) [1..ncols m]) <> " )" | i <- [1..nrows m] ]
  where
-  mx = V.maximum $ fmap (length . show) v
+  mx = V.maximum $ fmap (V.maximum . fmap (length . show)) v
   fill k str = replicate (k - length str) ' ' ++ str
 
 instance Show a => Show (Matrix a) where
@@ -93,43 +94,13 @@ instance NFData a => NFData (Matrix a) where
 --
 --   Useful when using 'submatrix' from a big matrix.
 forceMatrix :: Matrix a -> Matrix a
-forceMatrix (M n m v) = M n m $ V.force v
-
--------------------------------------------------------
--------------------------------------------------------
----- ENCODING/DECODING
-
--- Encoding/decoding rules
-{-# RULES
-"matrix/encode" forall m x. decode m (encode m x) = x
-"matrix/decode" forall m x. encode m (decode m x) = x
-  #-}
-
--- | One-dimensional encoding of a two-dimensional index.
---
--- 'decode' m '.' 'encode' m = 'id'
---
-encode :: Int -- ^ Columns of the matrix.
-       -> (Int,Int) -> Int
-{-# INLINE encode #-}
-encode m (i,j) = (i-1) * m + j - 1
-
--- | One-dimensional decoding of a two-dimensional index.
---
--- 'encode' m '.' 'decode' m = 'id'
---
-decode :: Int -- ^ Columns of the matrix.
-       -> Int -> (Int,Int)
-{-# INLINE decode #-}
-decode m k = (q+1,r+1)
- where
-  (q,r) = quotRem k m
+forceMatrix (M n m v) = M n m $ V.map V.force $ V.force v
 
 -------------------------------------------------------
 -------------------------------------------------------
 ---- BUILDERS
 
--- | The zero matrix of the given size.
+-- | /O(rows*cols)/. The zero matrix of the given size.
 --
 -- > zero n m =
 -- >                 n
@@ -142,9 +113,9 @@ zero :: Num a =>
      Int -- ^ Rows
   -> Int -- ^ Columns
   -> Matrix a
-zero n m = M n m $ V.replicate (n*m) 0
+zero n m = M n m $ V.replicate n $ V.replicate m 0
 
--- | Generate a matrix from a generator function.
+-- | /O(rows*cols)/. Generate a matrix from a generator function.
 --   Example of usage:
 --
 -- >                                  (  1  0 -1 -2 )
@@ -155,9 +126,9 @@ matrix :: Int -- ^ Rows
        -> Int -- ^ Columns
        -> ((Int,Int) -> a) -- ^ Generator function
        -> Matrix a
-matrix n m f = M n m $ V.generate (n*m) (f . decode m)
+matrix n m f = M n m $ V.generate n $ \i -> V.generate m $ \j -> f (i+1,j+1)
 
--- | Identity matrix of the given order.
+-- | /O(rows*cols)/. Identity matrix of the given order.
 --
 -- > identity n =
 -- >                 n
@@ -170,6 +141,25 @@ matrix n m f = M n m $ V.generate (n*m) (f . decode m)
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
+-- | Create a matrix from a non-empty list given the desired size.
+--   The list must have at least /rows*cols/ elements.
+--   An example:
+--
+-- >                       ( 1 2 3 )
+-- >                       ( 4 5 6 )
+-- > fromList 3 3 [1..] =  ( 7 8 9 )
+--
+fromList :: Int -- ^ Rows
+         -> Int -- ^ Columns
+         -> [a] -- ^ List of elements
+         -> Matrix a
+fromList n m xs = fromLists $ go 1 xs
+ where
+  go i ys = if i > n
+               then []
+               else let (r,zs) = splitAt m ys
+                    in  r : go (succ i) zs
+
 -- | Create a matrix from an non-empty list of non-empty lists.
 --   /Each list must have the same number of elements/.
 --   For example:
@@ -179,17 +169,18 @@ identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 -- >           , [7,8,9] ] =  ( 7 8 9 )
 --
 fromLists :: [[a]] -> Matrix a
-fromLists xss = M (length xss) (length $ head xss) $ mconcat $ fmap V.fromList xss
+-- Requires further optimization.
+fromLists xss = M (length xss) (length $ head xss) $ V.fromList $ fmap V.fromList xss
 
 -- | /O(1)/. Represent a vector as a one row matrix.
 rowVector :: V.Vector a -> Matrix a
-rowVector v = M 1 (V.length v) v
+rowVector v = M 1 (V.length v) $ V.singleton v
 
--- | /O(1)/. Represent a vector as a one column matrix.
+-- | /O(rows)/. Represent a vector as a one column matrix.
 colVector :: V.Vector a -> Matrix a
-colVector v = M (V.length v) 1 v
+colVector v = M (V.length v) 1 $ V.map V.singleton v
 
--- | Permutation matrix.
+-- | /O(rows*cols)/. Permutation matrix.
 --
 -- > permMatrix n i j =
 -- >               i     j       n
@@ -231,7 +222,7 @@ getElem :: Int      -- ^ Row
 getElem i j (M n m v)
  | i > n || j > m = error $ "Trying to get the " ++ show (i,j) ++ " element from a "
                          ++ sizeStr n m ++ " matrix."
- | otherwise = v V.! encode m (i,j)
+ | otherwise = (v V.! (i-1)) V.! (j-1)
 
 -- | Short alias for 'getElem'.
 (!) :: Matrix a -> (Int,Int) -> a
@@ -239,9 +230,7 @@ m ! (i,j) = getElem i j m
 
 -- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
-getRow i m = V.slice (encode k (i,1)) k $ mvect m
- where
-  k = ncols m
+getRow i (M _ _ vs) = vs V.! (i-1)
 
 -- | /O(rows)/. Get a column of a matrix as a vector.
 getCol :: Int -> Matrix a -> V.Vector a
@@ -257,12 +246,17 @@ getDiag m = V.generate k $ \i -> m ! (i+1,i+1)
 -------------------------------------------------------
 ---- MANIPULATING MATRICES
 
+msetElem:: PrimMonad m => a -> (Int,Int) -> MV.MVector (PrimState m) (V.Vector a) -> m ()
+msetElem x (i,j) m = do
+ r <- MV.read m (i-1)
+ MV.write m (i-1) $ V.modify (\mv -> MV.write mv (j-1) x) r
+
 -- | /O(1)/. Replace the value of a cell in a matrix.
 setElem :: a -- ^ New value.
         -> (Int,Int) -- ^ Position to replace.
         -> Matrix a -- ^ Original matrix.
         -> Matrix a -- ^ Matrix with the given position replaced with the given value.
-setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)) x) v
+setElem x p (M n m vs) = M n m $ V.modify (msetElem x p) vs
 
 -- | /O(rows*cols)/. The transpose of a matrix.
 --   Example:
@@ -271,10 +265,7 @@ setElem x (i,j) (M n m v) = M n m $ V.modify (\mv -> MV.write mv (encode m (i,j)
 -- >           ( 4 5 6 )   ( 2 5 8 )
 -- > transpose ( 7 8 9 ) = ( 3 6 9 )
 transpose :: Matrix a -> Matrix a
-transpose (M n m v) = M m n $ V.backpermute v $
- fmap (\k -> let (q,r) = quotRem k n
-             in  r*m + q
-       ) $ V.enumFromN 0 (V.length v)
+transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
 -- | Extend a matrix to a given size adding zeroes.
 --   If the matrix already has the required size, nothing happens.
@@ -300,23 +291,23 @@ extendTo n m a = a''
 -------------------------------------------------------
 ---- WORKING WITH BLOCKS
 
--- | Extract a submatrix given row and column limits.
+-- | /O(r2-r1)/. Extract a submatrix given row and column limits.
 --   Example:
 --
 -- >                   ( 1 2 3 )
 -- >                   ( 4 5 6 )   ( 2 3 )
 -- > submatrix 1 2 2 3 ( 7 8 9 ) = ( 5 6 )
-submatrix :: Int    -- ^ Starting row
-             -> Int -- ^ Ending row
+submatrix :: Int    -- ^ Starting row /r1/
+             -> Int -- ^ Ending row /r2/
           -> Int    -- ^ Starting column
              -> Int -- ^ Ending column
           -> Matrix a
           -> Matrix a
 {-# INLINE submatrix #-}
-submatrix r1 r2 c1 c2 (M _ m v) = M (r2-r1+1) m' $
- V.concat [ V.unsafeSlice (encode m (r,c1)) m' v | r <- [r1 .. r2] ]
+submatrix r1 r2 c1 c2 (M _ _ vs) = M r' c' $ V.map (V.unsafeSlice (c1-1) c') $ V.unsafeSlice (r1-1) r' vs
   where
-   m' = c2-c1+1
+   r' = r2-r1+1
+   c' = c2-c1+1
 
 -- | Remove a row and a column from a matrix.
 --   Example:
@@ -328,9 +319,10 @@ minorMatrix :: Int -- ^ Row @r@ to remove.
             -> Int -- ^ Column @c@ to remove.
             -> Matrix a -- ^ Original matrix.
             -> Matrix a -- ^ Matrix with row @r@ and column @c@ removed.
+-- Requires further optimization.
 minorMatrix r c (M n m v) = M (n-1) (m-1) $
-    V.ifilter (\k _ -> let (i,j) = decode m k
-                       in  i /= r && j /= c ) v
+  V.map (V.ifilter $ \j _ -> j+1 /= c) $
+    V.ifilter (\i _ -> i+1 /= r) v
 
 -- | Make a block-partition of a matrix using a given element as reference.
 --   The element will stay in the bottom-right corner of the top-left corner matrix.
@@ -377,13 +369,10 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 -- Where both matrices /A/ and /B/ have the same number of rows.
 (<|>) :: Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<|>) #-}
-(M n m v) <|> (M n' m' v')
+(M n m vs) <|> (M n' m' vs')
  | n /= n' = error $ "Horizontal join of " ++ sizeStr n m ++ " and "
                   ++ sizeStr n' m' ++ " matrices."
- | otherwise = let v'' = V.concat [ V.slice (encode m  (r,1)) m  v
-                                 <> V.slice (encode m' (r,1)) m' v'
-                                     | r <- [1..n] ]
-               in  M n (m+m') v''
+ | otherwise = M n (m+m') $ V.zipWith (V.++) vs vs'
 
 -- | Vertically join two matrices. Visually:
 --
@@ -451,7 +440,7 @@ first f = go
 -- | Strassen's algorithm over square matrices of order @2^n@.
 strassen :: Num a => Matrix a -> Matrix a -> Matrix a
 -- Trivial 1x1 multiplication.
-strassen (M 1 1 v) (M 1  1  v') = M 1 1 $ V.zipWith (*) v v'
+strassen (M 1 1 v) (M 1  1  v') = M 1 1 $ V.zipWith (V.zipWith (*)) v v'
 -- General case guesses that the input matrices are square matrices
 -- whose order is a power of two.
 strassen a b = joinBlocks (c11,c12,c21,c22)
@@ -488,7 +477,7 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 150
+strmixFactor = 75
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -537,7 +526,7 @@ multStrassenMixed a1@(M n m _) a2@(M n' m' _)
 ---- FUNCTOR INSTANCE
 
 instance Functor Matrix where
- fmap f (M n m v) = M n m $ fmap f v
+ fmap f (M n m v) = M n m $ fmap (fmap f) v
 
 -- | Map a function over a row.
 --   Example:
@@ -550,15 +539,14 @@ mapRow :: (Int -> a -> a) -- ^ Function takes the current column as additional a
         -> Int            -- ^ Row to map.
         -> Matrix a -> Matrix a
 mapRow f r (M n m v) =
-    M n m $ V.imap (\k x -> let (i,j) = decode m k
-                            in  if i == r then f j x else x) v
+    M n m $ V.imap (\i rx -> if i+1 == r then V.imap (f . succ) rx else rx) v
 
 -------------------------------------------------------
 -------------------------------------------------------
 ---- NUMERICAL INSTANCE
 
 instance Num a => Num (Matrix a) where
- fromInteger = M 1 1 . V.singleton . fromInteger
+ fromInteger = M 1 1 . V.singleton . V.singleton . fromInteger
  negate = fmap negate
  abs = fmap abs
  signum = fmap signum
@@ -568,7 +556,7 @@ instance Num a => Num (Matrix a) where
    | n /= n' || m /= m' = error $ "Addition of " ++ sizeStr n m ++ " and "
                                ++ sizeStr n' m' ++ " matrices."
    -- Otherwise, trivial zip.
-   | otherwise = M n m $ V.zipWith (+) v v'
+   | otherwise = M n m $ V.zipWith (V.zipWith (+)) v v'
  -- Multiplication of matrices.
  (*) = multStrassenMixed
 
@@ -613,12 +601,7 @@ switchRows :: Int -- ^ Row 1.
            -> Int -- ^ Row 2.
            -> Matrix a -- ^ Original matrix.
            -> Matrix a -- ^ Matrix with rows 1 and 2 switched.
-switchRows r1 r2 a@(M n m _) = matrix n m f
- where
-  f (i,j)
-   | i == r1   = a ! (r2,j)
-   | i == r2   = a ! (r1,j)
-   | otherwise = a ! ( i,j)
+switchRows r1 r2 (M n m vs) = M n m $ V.modify (\mv -> MV.swap mv (r1-1) (r2-1)) vs
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -676,8 +659,8 @@ recLUDecomp u l p d k n =
   u' = switchRows k i u
   l' = M n n $
        V.modify (\mv -> mapM_ (\j -> do
-         MV.write mv (encode n (i,j)) $ l ! (k,j)
-         MV.write mv (encode n (k,j)) $ l ! (i,j) 
+         msetElem (l ! (k,j)) (i,j) mv
+         msetElem (l ! (i,j)) (k,j) mv
            ) [1 .. k-1] ) $ mvect l
   p' = switchRows k i p
   -- Permutation determinant
@@ -718,7 +701,7 @@ diagProd = V.product . getDiag
 --   If the elements of the 'Matrix' are instance of 'Ord' and 'Fractional'
 --   consider to use 'detLU' in order to obtain better performance.
 detLaplace :: Num a => Matrix a -> a
-detLaplace (M 1 1 v) = V.head v
+detLaplace (M 1 1 v) = V.head (V.head v)
 detLaplace m =
     sum [ (-1)^(i-1) * m ! (i,1) * detLaplace (minorMatrix i 1 m) | i <- [1 .. nrows m] ]
 
