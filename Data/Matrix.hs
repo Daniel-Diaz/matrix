@@ -270,7 +270,7 @@ permMatrix n r1 r2 = matrix n n f
 -------------------------------------------------------
 ---- ACCESSING
 
--- | /O(1)/. Get an element of a matrix.
+-- | /O(1)/. Get an element of a matrix. Indices range from /(1,1)/ to /(n,m)/.
 getElem :: Int      -- ^ Row
         -> Int      -- ^ Column
         -> Matrix a -- ^ Matrix
