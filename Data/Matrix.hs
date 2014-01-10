@@ -719,8 +719,8 @@ switchCols c1 c2 (M n m vs) = M n m $ V.modify (\mv -> do
 luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
+  i = (identity $ nrows a)
   n = min (nrows a) (ncols a)
-  i = identity $ nrows a
 
 recLUDecomp ::  (Ord a, Fractional a)
             =>  Matrix a -- ^ U
@@ -731,17 +731,17 @@ recLUDecomp ::  (Ord a, Fractional a)
             ->  Int      -- ^ Total rows
             -> (Matrix a,Matrix a,Matrix a,a)
 recLUDecomp u l p d k n =
-    if k == n then (u,l,p,d)
-              else recLUDecomp u'' l'' p' d' (k+1) n
+    if k > n then (u,l,p,d)
+    else recLUDecomp u'' l'' p' d' (k+1) n
  where
   -- Pivot strategy: maximum value in absolute value below the current row.
   i  = maximumBy (\x y -> compare (abs $ u ! (x,k)) (abs $ u ! (y,k))) [ k .. n ]
   -- Switching to place pivot in current row.
   u' = switchRows k i u
-  l' = M n n $
+  l' = M (nrows l) (ncols l) $
        V.modify (\mv -> mapM_ (\j -> do
-         msetElem (l ! (k,j)) n (i,j) mv
-         msetElem (l ! (i,j)) n (k,j) mv
+         msetElem (l ! (k,j)) (ncols l) (i,j) mv
+         msetElem (l ! (i,j)) (ncols l) (k,j) mv
            ) [1 .. k-1] ) $ mvect l
   p' = switchRows k i p
   -- Permutation determinant
@@ -750,9 +750,88 @@ recLUDecomp u l p d k n =
   (u'',l'') = go u' l' (k+1)
   ukk = u' ! (k,k)
   go u_ l_ j =
-    if j > n then (u_,l_)
-             else let x = (u_ ! (j,k)) / ukk
-                  in  go (combineRows j (-x) k u_) (setElem x (j,k) l_) (j+1)
+    if j > nrows u_
+    then (u_,l_)
+    else let x = (u_ ! (j,k)) / ukk
+         in  go (combineRows j (-x) k u_) (setElem x (j,k) l_) (j+1)
+
+-- | Matrix LU decomposition with /complete pivoting/.
+--   The result for a matrix /M/ is given in the format /(U,L,P,Q,d,e)/ where:
+--
+--   * /U/ is an upper triangular matrix.
+--
+--   * /L/ is an /unit/ lower triangular matrix.
+--
+--   * /P,Q/ is a permutation matrix.
+--
+--   * /d,e/ is the determinant of /P,Q/.
+--
+--   * /PMQ = LU/.
+--
+--   These properties are only guaranteed when the input matrix is invertible.
+--   An additional property matches thanks to the strategy followed for pivoting:
+--
+--   * /L_(i,j)/ <= 1, for all /i,j/.
+--
+--   This follows from the maximal property of the selected pivots, which also
+--   leads to a better numerical stability of the algorithm.
+--
+--   Example:
+--
+-- >           ( 1 0 )     ( 2 1 )   (   1    0 0 )   ( 0 0 1 )
+-- >           ( 0 2 )     ( 0 2 )   (   0    1 0 )   ( 0 1 0 )   ( 1 0 )
+-- > luDecomp' ( 2 1 ) = ( ( 0 0 ) , ( 1/2 -1/4 1 ) , ( 1 0 0 ) , ( 0 1 ) , -1 , 1 )
+luDecomp' :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
+luDecomp' a = recLUDecomp' a i i (identity $ ncols a) 1 1 1 n
+ where
+  i = identity $ nrows a
+  n = min (nrows a) (ncols a)
+
+recLUDecomp' ::  (Ord a, Fractional a)
+            =>  Matrix a -- ^ U
+            ->  Matrix a -- ^ L
+            ->  Matrix a -- ^ P
+            ->  Matrix a -- ^ Q
+            ->  a        -- ^ d
+            ->  a        -- ^ e
+            ->  Int      -- ^ Current row
+            ->  Int      -- ^ Total rows
+            -> (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
+recLUDecomp' u l p q d e k n =
+    if k > n || u'' ! (k, k) == 0
+    then (u,l,p,q,d,e)
+    else recLUDecomp' u'' l'' p' q' d' e' (k+1) n
+ where
+  -- Pivot strategy: maximum value in absolute value below the current row & col.
+  (i, j) = maximumBy (comparing (\(i0, j0) -> abs $ u ! (i0,j0)))
+           [ (i0, j0) | i0 <- [k .. nrows u], j0 <- [k .. ncols u] ]
+  -- Switching to place pivot in current row.
+  u' = switchCols k j $ switchRows k i u
+  l'0 = M (nrows l) (ncols l) $
+        V.modify (\mv -> forM_ [1..k-1] $ \ h -> do
+                     msetElem (l ! (k,h)) (ncols l) (i,h) mv
+                     msetElem (l ! (i,h)) (ncols l) (k,h) mv
+                 )
+        $ mvect l
+  l'  = M (nrows l) (ncols l) $
+        V.modify (\mv -> forM_ [1..k-1] $ \h -> do
+                     msetElem (l'0 ! (h,k)) (ncols l) (h,i) mv
+                     msetElem (l'0 ! (h,i)) (ncols l) (h,k) mv
+                 )
+        $ mvect l'0
+  p' = switchRows k i p
+  q' = switchCols k j q
+  -- Permutation determinant
+  d' = if i == k then d else negate d
+  e' = if j == k then e else negate e
+  -- Cancel elements below the pivot.
+  (u'',l'') = go u' l' (k+1)
+  ukk = u' ! (k,k)
+  go u_ l_ h =
+    if h > nrows u_
+    then (u_,l_)
+    else let x = (u_ ! (h,k)) / ukk
+         in  go (combineRows h (-x) k u_) (setElem x (h,k) l_) (h+1)
 
 -------------------------------------------------------
 -------------------------------------------------------
