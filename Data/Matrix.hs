@@ -1,4 +1,3 @@
-
 -- | Matrix datatype and operations.
 --
 --   Every provided example has been tested.
@@ -45,6 +44,7 @@ module Data.Matrix (
   , scaleRow
   , combineRows
   , switchRows
+  , switchCols
     -- * Decompositions
   , luDecomp
     -- * Properties
@@ -55,15 +55,16 @@ module Data.Matrix (
   ) where
 
 -- Classes
-import Data.Monoid
-import Data.Foldable (Foldable (..))
-import Data.Traversable
 import Control.DeepSeq
+import Control.Monad    (forM_)
+import Data.Foldable    (Foldable (..))
+import Data.Monoid
+import Data.Traversable
 -- Data
-import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as MV
-import Control.Monad.Primitive (PrimMonad,PrimState)
-import Data.List (maximumBy)
+import           Control.Monad.Primitive (PrimMonad, PrimState)
+import           Data.List               (maximumBy)
+import qualified Data.Vector             as V
+import qualified Data.Vector.Mutable     as MV
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -543,7 +544,7 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 100 
+strmixFactor = 100
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -665,7 +666,23 @@ switchRows :: Int -- ^ Row 1.
            -> Int -- ^ Row 2.
            -> Matrix a -- ^ Original matrix.
            -> Matrix a -- ^ Matrix with rows 1 and 2 switched.
-switchRows r1 r2 (M n m vs) = M n m $ V.modify (\mv -> MV.swap mv (r1-1) (r2-1)) vs
+switchRows r1 r2 (M n m vs) = M n m $ V.modify (\mv -> do
+  forM_ [1..m] $ \j ->
+    MV.swap mv (encode m (r1, j)) (encode m (r2, j))) vs
+
+-- | Switch two coumns of a matrix.
+--   Example:
+--
+-- >                ( 1 2 3 )   ( 2 1 3 )
+-- >                ( 4 5 6 )   ( 5 4 6 )
+-- > switchCols 1 2 ( 7 8 9 ) = ( 8 7 9 )
+switchCols :: Int -- ^ Col 1.
+           -> Int -- ^ Col 2.
+           -> Matrix a -- ^ Original matrix.
+           -> Matrix a -- ^ Matrix with cols 1 and 2 switched.
+switchCols c1 c2 (M n m vs) = M n m $ V.modify (\mv -> do
+  forM_ [1..n] $ \j ->
+    MV.swap mv (encode m (j, c1)) (encode m (j, c2))) vs
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -693,7 +710,7 @@ switchRows r1 r2 (M n m vs) = M n m $ V.modify (\mv -> MV.swap mv (r1-1) (r2-1))
 --
 --   This follows from the maximal property of the selected pivots, which also
 --   leads to a better numerical stability of the algorithm.
---   
+--
 --   Example:
 --
 -- >          ( 1 2 0 )     ( 2 0  2 )   (   1 0 0 )   ( 0 0 1 )
@@ -702,8 +719,8 @@ switchRows r1 r2 (M n m vs) = M n m $ V.modify (\mv -> MV.swap mv (r1-1) (r2-1))
 luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
-  n = nrows a
-  i = identity n
+  n = min (nrows a) (ncols a)
+  i = identity $ nrows a
 
 recLUDecomp ::  (Ord a, Fractional a)
             =>  Matrix a -- ^ U
