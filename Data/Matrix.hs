@@ -46,7 +46,7 @@ module Data.Matrix (
   , switchRows
   , switchCols
     -- * Decompositions
-  , luDecomp
+  , luDecomp , luDecompUnsafe
   , luDecomp'
   , cholDecomp
     -- * Properties
@@ -719,10 +719,10 @@ switchCols c1 c2 (M n m vs) = M n m $ V.modify (\mv -> do
 -- >          ( 1 2 0 )     ( 2 0  2 )   (   1 0 0 )   ( 0 0 1 )
 -- >          ( 0 2 1 )     ( 0 2 -1 )   ( 1/2 1 0 )   ( 1 0 0 )
 -- > luDecomp ( 2 0 2 ) = ( ( 0 0  2 ) , (   0 1 1 ) , ( 0 1 0 ) , 1 )
-luDecomp :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,a)
+luDecomp :: (Ord a, Fractional a) => Matrix a -> Maybe (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
-  i = (identity $ nrows a)
+  i = identity $ nrows a
   n = min (nrows a) (ncols a)
 
 recLUDecomp ::  (Ord a, Fractional a)
@@ -732,10 +732,11 @@ recLUDecomp ::  (Ord a, Fractional a)
             ->  a        -- ^ d
             ->  Int      -- ^ Current row
             ->  Int      -- ^ Total rows
-            -> (Matrix a,Matrix a,Matrix a,a)
+            -> Maybe (Matrix a,Matrix a,Matrix a,a)
 recLUDecomp u l p d k n =
-    if k > n then (u,l,p,d)
-    else recLUDecomp u'' l'' p' d' (k+1) n
+    if k > n then Just (u,l,p,d)
+    else if ukk == 0 then Nothing
+                     else recLUDecomp u'' l'' p' d' (k+1) n
  where
   -- Pivot strategy: maximum value in absolute value below the current row.
   i  = maximumBy (\x y -> compare (abs $ u ! (x,k)) (abs $ u ! (y,k))) [ k .. n ]
@@ -757,6 +758,12 @@ recLUDecomp u l p d k n =
     then (u_,l_)
     else let x = (u_ ! (j,k)) / ukk
          in  go (combineRows j (-x) k u_) (setElem x (j,k) l_) (j+1)
+
+-- | Unsafe version of 'luDecomp'. It fails when the input matrix is singular.
+luDecompUnsafe :: (Ord a, Fractional a) => Matrix a -> (Matrix a, Matrix a, Matrix a, a)
+luDecompUnsafe m = case luDecomp m of
+  Just x -> x
+  _ -> error "luDecompUnsafe of singular matrix."
 
 -- | Matrix LU decomposition with /complete pivoting/.
 --   The result for a matrix /M/ is given in the format /(U,L,P,Q,d,e)/ where:
@@ -909,6 +916,6 @@ detLaplace m =
 
 -- | Matrix determinant using LU decomposition.
 detLU :: (Ord a, Fractional a) => Matrix a -> a
-detLU m = d * diagProd u
- where
-  (u,_,_,d) = luDecomp m
+detLU m = case luDecomp m of
+  Just (u,_,_,d) -> d * diagProd u
+  Nothing -> 0

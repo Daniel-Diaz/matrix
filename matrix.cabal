@@ -1,5 +1,5 @@
 Name: matrix
-Version: 0.2.4.0
+Version: 0.3.0.0
 Author: Daniel Díaz
 Category: Math
 Build-type: Simple
@@ -29,7 +29,7 @@ Source-repository head
   location: git://github.com/Daniel-Diaz/matrix.git
 
 Library
-  Build-depends: base ==4.*
+  Build-depends: base == 4.*
                , vector >= 0.10 && < 0.11
                , deepseq >= 1.3.0.0 && < 1.4
                , primitive >= 0.5 && < 0.6
@@ -40,7 +40,18 @@ Benchmark matrix-mult
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: mult.hs
-  build-depends: base ==4.*
+  build-depends: base == 4.*
                , matrix
                , criterion
+  ghc-options: -O2
+
+Test-Suite matrix-test
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends: base == 4.*
+               , matrix
+               , tasty
+               , QuickCheck
+               , tasty-quickcheck
   ghc-options: -O2
