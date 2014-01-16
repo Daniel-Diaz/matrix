@@ -63,6 +63,7 @@ import Data.Traversable
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy)
+import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
 
