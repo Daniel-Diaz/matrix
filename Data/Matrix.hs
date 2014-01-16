@@ -765,9 +765,9 @@ recLUDecomp u l p d k n =
 --
 --   * /L/ is an /unit/ lower triangular matrix.
 --
---   * /P,Q/ is a permutation matrix.
+--   * /P,Q/ are permutation matrices.
 --
---   * /d,e/ is the determinant of /P,Q/.
+--   * /d,e/ are the determinants of /P/ and /Q/ respectively.
 --
 --   * /PMQ = LU/.
 --
