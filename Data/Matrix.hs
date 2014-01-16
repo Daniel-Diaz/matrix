@@ -833,6 +833,29 @@ recLUDecomp' u l p q d e k n =
     else let x = (u_ ! (h,k)) / ukk
          in  go (combineRows h (-x) k u_) (setElem x (h,k) l_) (h+1)
 
+-- CHOLESKY DECOMPOSITION
+
+-- | Simple Cholesky decomposition of a symmetric, positive definite matrix.
+--   The result for a matrix /M/ is a lower triangular matrix /L/ such that:
+--
+--   * /M = LL^T/.
+--
+--   Example:
+--
+-- >            (  2 -1  0 )   (  1.41  0     0    )
+-- >            ( -1  2 -1 )   ( -0.70  1.22  0    )
+-- > cholDecomp (  0 -1  2 ) = (  0.00 -0.81  1.15 )
+cholDecomp :: (Floating a) => Matrix a -> Matrix a
+cholDecomp a
+        | (nrows a == 1) && (ncols a == 1) = fmap sqrt a
+        | otherwise = joinBlocks (l11, l12, l21, l22) where
+    (a11, a12, a21, a22) = splitBlocks 1 1 a
+    l11' = sqrt (a11 ! (1,1))
+    l11 = fromList 1 1 [l11']
+    l12 = zero (nrows a12) (ncols a12)
+    l21 = scaleMatrix (1/l11') a21
+    a22' = a22 - multStd l21 (transpose l21)
+    l22 = cholDecomp a22'
 -------------------------------------------------------
 -------------------------------------------------------
 ---- PROPERTIES
