@@ -47,6 +47,8 @@ module Data.Matrix (
   , switchCols
     -- * Decompositions
   , luDecomp
+  , luDecomp'
+  , cholDecomp
     -- * Properties
   , trace , diagProd
     -- ** Determinants
