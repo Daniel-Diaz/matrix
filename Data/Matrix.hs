@@ -909,12 +909,14 @@ diagProd = V.product . getDiag
 -- | Matrix determinant using Laplace expansion.
 --   If the elements of the 'Matrix' are instance of 'Ord' and 'Fractional'
 --   consider to use 'detLU' in order to obtain better performance.
+--   Function 'detLaplace' is /extremely/ slow.
 detLaplace :: Num a => Matrix a -> a
 detLaplace (M 1 1 v) = V.head v
 detLaplace m =
     sum [ (-1)^(i-1) * m ! (i,1) * detLaplace (minorMatrix i 1 m) | i <- [1 .. nrows m] ]
 
 -- | Matrix determinant using LU decomposition.
+--   It works even when the input matrix is singular.
 detLU :: (Ord a, Fractional a) => Matrix a -> a
 detLU m = case luDecomp m of
   Just (u,_,_,d) -> d * diagProd u
