@@ -78,7 +78,7 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \(Sq m) -> detLaplace m == detLU m
   , QC.testProperty "if (u,l,p,q,d,e) = luDecomp' m then (p*m*q = l*u) && (detLU p = d) && (detLU q = e)"
        $ \(Sq m) -> (detLU m /= 0) ==>
-             (let (u,l,p,q,d,e) = luDecomp' m in p*m*q == l*u && detLU p == d && detLU q == e)
+             (let (u,l,p,q,d,e) = luDecompUnsafe' m in p*m*q == l*u && detLU p == d && detLU q == e)
   , QC.testProperty "detLU (scaleRow k i m) = k * detLU m"
        $ \(Sq m) k -> forAll (choose (1,nrows m))
        $ \i -> detLU (scaleRow k i m) == k * detLU m

@@ -1,6 +1,8 @@
+
 -- | Matrix datatype and operations.
 --
 --   Every provided example has been tested.
+--   Run @cabal test@ for further tests.
 module Data.Matrix (
     -- * Matrix type
     Matrix , prettyMatrix
@@ -47,7 +49,7 @@ module Data.Matrix (
   , switchCols
     -- * Decompositions
   , luDecomp , luDecompUnsafe
-  , luDecomp'
+  , luDecomp', luDecompUnsafe'
   , cholDecomp
     -- * Properties
   , trace , diagProd
@@ -87,7 +89,7 @@ decode m k = (q+1,r+1)
 data Matrix a = M {
    nrows :: {-# UNPACK #-} !Int -- ^ Number of rows.
  , ncols :: {-# UNPACK #-} !Int -- ^ Number of columns.
- , mvect :: (V.Vector a) -- ^ Content of the matrix as a plain vector.
+ , mvect :: V.Vector a          -- ^ Content of the matrix as a plain vector.
    } deriving Eq
 
 -- | Just a cool way to output the size of a matrix.
@@ -119,6 +121,7 @@ forceMatrix (M n m v) = M n m $ V.force v
 ---- FUNCTOR INSTANCE
 
 instance Functor Matrix where
+ {-# INLINE fmap #-}
  fmap f (M n m v) = M n m $ V.map f v
 
 -- | /O(rows*cols)/. Map a function over a row.
@@ -218,7 +221,7 @@ fromList :: Int -- ^ Rows
          -> [a] -- ^ List of elements
          -> Matrix a
 {-# INLINE fromList #-}
-fromList n m = M n m . V.fromList
+fromList n m = M n m . V.fromListN (n*m)
 
 -- | Create a matrix from an non-empty list of non-empty lists.
 --   /Each list must have the same number of elements/.
@@ -280,7 +283,7 @@ getElem :: Int      -- ^ Row
         -> Matrix a -- ^ Matrix
         -> a
 {-# INLINE getElem #-}
-getElem i j (M _ m v) = v V.! encode m (i,j)
+getElem i j (M _ m v) = V.unsafeIndex v $ encode m (i,j)
 
 -- | Short alias for 'getElem'.
 {-# INLINE (!) #-}
@@ -290,7 +293,7 @@ m ! (i,j) = getElem i j m
 -- | Safe variant of 'getElem'.
 safeGet :: Int -> Int -> Matrix a -> Maybe a
 safeGet i j a@(M n m _)
- | i > n || j > m = Nothing
+ | i > n || j > m || i < 1 || j < 1 = Nothing
  | otherwise = Just $ getElem i j a
 
 -- | /O(cols)/. Get a row of a matrix as a vector.
@@ -411,7 +414,6 @@ splitBlocks :: Int      -- ^ Row of the splitting element.
             -> Matrix a -- ^ Matrix to split.
             -> (Matrix a,Matrix a
                ,Matrix a,Matrix a) -- ^ (TL,TR,BL,BR)
-{-# INLINE splitBlocks #-}
 splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1) m a
                               , submatrix (i+1) n 1 j a , submatrix (i+1) n (j+1) m a )
 
@@ -419,7 +421,6 @@ splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1
 joinBlocks :: (Matrix a,Matrix a
               ,Matrix a,Matrix a)
            ->  Matrix a
-{-# INLINE joinBlocks #-}
 joinBlocks (tl,tr,bl,br) = (tl <|> tr)
                                <->
                            (bl <|> br)
@@ -791,11 +792,17 @@ luDecompUnsafe m = case luDecomp m of
 -- >           ( 1 0 )     ( 2 1 )   (   1    0 0 )   ( 0 0 1 )
 -- >           ( 0 2 )     ( 0 2 )   (   0    1 0 )   ( 0 1 0 )   ( 1 0 )
 -- > luDecomp' ( 2 1 ) = ( ( 0 0 ) , ( 1/2 -1/4 1 ) , ( 1 0 0 ) , ( 0 1 ) , -1 , 1 )
-luDecomp' :: (Ord a, Fractional a) => Matrix a -> (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
+luDecomp' :: (Ord a, Fractional a) => Matrix a -> Maybe (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
 luDecomp' a = recLUDecomp' a i i (identity $ ncols a) 1 1 1 n
  where
   i = identity $ nrows a
   n = min (nrows a) (ncols a)
+
+-- | Unsafe version of 'luDecomp''. It fails when the input matrix is singular.
+luDecompUnsafe' :: (Ord a, Fractional a) => Matrix a -> (Matrix a, Matrix a, Matrix a, Matrix a, a, a)
+luDecompUnsafe' m = case luDecomp' m of
+  Just x -> x
+  _ -> error "luDecompUnsafe' of singular matrix."
 
 recLUDecomp' ::  (Ord a, Fractional a)
             =>  Matrix a -- ^ U
@@ -806,11 +813,13 @@ recLUDecomp' ::  (Ord a, Fractional a)
             ->  a        -- ^ e
             ->  Int      -- ^ Current row
             ->  Int      -- ^ Total rows
-            -> (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
+            ->  Maybe (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
 recLUDecomp' u l p q d e k n =
     if k > n || u'' ! (k, k) == 0
-    then (u,l,p,q,d,e)
-    else recLUDecomp' u'' l'' p' q' d' e' (k+1) n
+    then Just (u,l,p,q,d,e)
+    else if ukk == 0
+            then Nothing
+            else recLUDecomp' u'' l'' p' q' d' e' (k+1) n
  where
   -- Pivot strategy: maximum value in absolute value below the current row & col.
   (i, j) = maximumBy (comparing (\(i0, j0) -> abs $ u ! (i0,j0)))
