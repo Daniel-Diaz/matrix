@@ -66,7 +66,7 @@ import Data.Monoid
 import Data.Traversable
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
-import           Data.List               (maximumBy)
+import           Data.List               (maximumBy,foldl1')
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
@@ -908,10 +908,10 @@ diagProd = V.product . getDiag
 -- DETERMINANT
 
 {-# RULES
-"matrix/detOfProduct"
+"matrix/detLaplaceProduct"
     forall a b. detLaplace (a*b) = detLaplace a * detLaplace b
 
-"matrix/detLUOfProduct"
+"matrix/detLUProduct"
     forall a b. detLU (a*b) = detLU a * detLU b
   #-}
 
@@ -921,8 +921,9 @@ diagProd = V.product . getDiag
 --   Function 'detLaplace' is /extremely/ slow.
 detLaplace :: Num a => Matrix a -> a
 detLaplace (M 1 1 v) = V.head v
-detLaplace m =
-    sum [ (-1)^(i-1) * m ! (i,1) * detLaplace (minorMatrix i 1 m) | i <- [1 .. nrows m] ]
+detLaplace m = sum1 [ (-1)^(i-1) * m ! (i,1) * detLaplace (minorMatrix i 1 m) | i <- [1 .. nrows m] ]
+  where
+    sum1 = foldl1' (+)
 
 -- | Matrix determinant using LU decomposition.
 --   It works even when the input matrix is singular.
