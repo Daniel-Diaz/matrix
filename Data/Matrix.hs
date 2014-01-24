@@ -33,6 +33,8 @@ module Data.Matrix (
     -- ** Joining blocks
   , (<|>) , (<->)
   , joinBlocks
+    -- * Matrix operations
+  , elementwise
     -- * Matrix multiplication
     -- ** About matrix multiplication
     -- $mult
@@ -456,6 +458,15 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 (<->) :: Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<->) #-}
 (M n m v) <-> (M n' _ v') = M (n+n') m $ v V.++ v'
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- MATRIX OPERATIONS
+
+-- | Perform an operation elementwise. The input matrices are assumed
+--   to have the same dimensions, but this is not checked.
+elementwise :: (a -> b -> c) -> (Matrix a -> Matrix b -> Matrix c)
+elementwise f (M n m v) (M _ _ v') = M n m $ V.zipWith f v v'
 
 -------------------------------------------------------
 -------------------------------------------------------
