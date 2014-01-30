@@ -298,9 +298,9 @@ safeGet i j a@(M n m _)
  | i > n || j > m || i < 1 || j < 1 = Nothing
  | otherwise = Just $ getElem i j a
 
--- | /O(cols)/. Get a row of a matrix as a vector.
+-- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
-getRow i (M _ m v) = V.generate m $ \j -> v V.! encode m (i,j+1)
+getRow i (M _ m v) = V.slice (m*(i-1)) m v
 
 -- | /O(rows)/. Get a column of a matrix as a vector.
 getCol :: Int -> Matrix a -> V.Vector a
