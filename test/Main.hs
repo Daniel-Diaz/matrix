@@ -67,6 +67,9 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \j -> setElem (getElem i j m) (i,j) m == (m :: Matrix R)
   , QC.testProperty "transpose (transpose m) = m"
        $ \m -> transpose (transpose m) == (m :: Matrix R)
+  , QC.testProperty "getRow i m = getCol i (transpose m)"
+       $ \m -> forAll (choose (1,nrows m))
+       $ \i -> getRow i (m :: Matrix R) == getCol i (transpose m)
   , QC.testProperty "joinBlocks (splitBlocks i j m) = m"
        $ \m -> forAll (choose (1,nrows m))
        $ \i -> forAll (choose (1,ncols m))
