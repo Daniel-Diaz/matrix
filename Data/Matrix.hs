@@ -335,25 +335,26 @@ setElem x p (M n m v) = M n m $ V.modify (msetElem x m p) v
 transpose :: Matrix a -> Matrix a
 transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
--- | Extend a matrix to a given size adding zeroes.
+-- | Extend a matrix to a given size adding a default element.
 --   If the matrix already has the required size, nothing happens.
 --   The matrix is /never/ reduced in size.
 --   Example:
 --
--- >                          ( 1 2 3 0 0 )
--- >              ( 1 2 3 )   ( 4 5 6 0 0 )
--- >              ( 4 5 6 )   ( 7 8 9 0 0 )
--- > extendTo 4 5 ( 7 8 9 ) = ( 0 0 0 0 0 )
-extendTo :: Num a
-         => Int -- ^ Minimal number of rows.
+-- >                            ( 1 2 3 0 0 )
+-- >                ( 1 2 3 )   ( 4 5 6 0 0 )
+-- >                ( 4 5 6 )   ( 7 8 9 0 0 )
+-- > extendTo 0 4 5 ( 7 8 9 ) = ( 0 0 0 0 0 )
+extendTo :: a   -- ^ Element to add when extending.
+         -> Int -- ^ Minimal number of rows.
          -> Int -- ^ Minimal number of columns.
          -> Matrix a -> Matrix a
-extendTo n m a = a''
+extendTo e n m a = a''
  where
+  es  = repeat e
   n'  = n - nrows a
-  a'  = if n' <= 0 then a  else a  <-> zero n' (ncols a)
+  a'  = if n' <= 0 then a  else a  <-> fromList n' (ncols a) es
   m'  = m - ncols a
-  a'' = if m' <= 0 then a' else a' <|> zero (nrows a') m'
+  a'' = if m' <= 0 then a' else a' <|> fromList (nrows a') m' es
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -554,8 +555,8 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
-           b1 = extendTo n2 n2 a1
-           b2 = extendTo n2 n2 a2
+           b1 = extendTo 0 n2 n2 a1
+           b2 = extendTo 0 n2 n2 a2
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
@@ -568,8 +569,8 @@ strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
 strassenMixed a@(M r _ _) b
  | r < strmixFactor = multStd_ a b
  | odd r = let r' = r + 1
-               a' = extendTo r' r' a
-               b' = extendTo r' r' b
+               a' = extendTo 0 r' r' a
+               b' = extendTo 0 r' r' b
            in  submatrix 1 r 1 r $ strassenMixed a' b'
  | otherwise = joinBlocks (c11,c12,c21,c22)
  where
@@ -602,8 +603,8 @@ multStrassenMixed a1@(M n m _) a2@(M n' m' _)
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2 = if even mx then mx else mx+1
-           b1 = extendTo n2 n2 a1
-           b2 = extendTo n2 n2 a2
+           b1 = extendTo 0 n2 n2 a1
+           b2 = extendTo 0 n2 n2 a2
        in  submatrix 1 n 1 m' $ strassenMixed b1 b2
 
 -------------------------------------------------------
