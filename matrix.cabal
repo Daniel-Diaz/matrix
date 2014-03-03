@@ -54,4 +54,3 @@ Test-Suite matrix-test
                , tasty
                , QuickCheck
                , tasty-quickcheck
-  ghc-options: -O2

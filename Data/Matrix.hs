@@ -23,14 +23,14 @@ module Data.Matrix (
   , getDiag
     -- * Manipulating matrices
   , setElem
-  , transpose , extendTo
+  , transpose , setSize , extendTo
   , mapRow , mapCol
     -- * Submatrices
     -- ** Splitting blocks
   , submatrix
   , minorMatrix
   , splitBlocks
-    -- ** Joining blocks
+   -- ** Joining blocks
   , (<|>) , (<->)
   , joinBlocks
     -- * Matrix operations
@@ -125,6 +125,9 @@ forceMatrix (M n m v) = M n m $ V.force v
 instance Functor Matrix where
  {-# INLINE fmap #-}
  fmap f (M n m v) = M n m $ V.map f v
+
+-------------------------------------------------------
+-------------------------------------------------------
 
 -- | /O(rows*cols)/. Map a function over a row.
 --   Example:
@@ -348,13 +351,22 @@ extendTo :: a   -- ^ Element to add when extending.
          -> Int -- ^ Minimal number of rows.
          -> Int -- ^ Minimal number of columns.
          -> Matrix a -> Matrix a
-extendTo e n m a = a''
- where
-  es  = repeat e
-  n'  = n - nrows a
-  a'  = if n' <= 0 then a  else a  <-> fromList n' (ncols a) es
-  m'  = m - ncols a
-  a'' = if m' <= 0 then a' else a' <|> fromList (nrows a') m' es
+extendTo e n m a = setSize e (max n $ nrows a) (max m $ ncols a) a
+
+-- | Set the size of a matrix to given parameters. Use a default element
+--   for undefined entries if the matrix has been extended.
+setSize :: a   -- ^ Default element.
+        -> Int -- ^ Number of rows.
+        -> Int -- ^ Number of columns.
+        -> Matrix a
+        -> Matrix a
+setSize e n m a@(M r c _) = M n m $ V.generate (n*m) $
+  \k -> let (i,j) = d k
+        in if i <= r && j <= c
+              then a ! (i,j)
+              else e
+    where
+      d = decode m
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -420,10 +432,9 @@ splitBlocks :: Int      -- ^ Row of the splitting element.
 splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1) m a
                               , submatrix (i+1) n 1 j a , submatrix (i+1) n (j+1) m a )
 
+
 -- | Join blocks of the form detailed in 'splitBlocks'.
-joinBlocks :: (Matrix a,Matrix a
-              ,Matrix a,Matrix a)
-           ->  Matrix a
+joinBlocks :: (Matrix a,Matrix a,Matrix a,Matrix a) -> Matrix a
 joinBlocks (tl,tr,bl,br) = (tl <|> tr)
                                <->
                            (bl <|> br)
@@ -555,12 +566,12 @@ multStrassen a1@(M n m _) a2@(M n' m' _)
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2  = first (>= mx) $ fmap (2^) [(0 :: Int)..]
-           b1 = extendTo 0 n2 n2 a1
-           b2 = extendTo 0 n2 n2 a2
+           b1 = setSize 0 n2 n2 a1
+           b2 = setSize 0 n2 n2 a2
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 100
+strmixFactor = 2 ^ (6 :: Int)
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -569,8 +580,8 @@ strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
 strassenMixed a@(M r _ _) b
  | r < strmixFactor = multStd_ a b
  | odd r = let r' = r + 1
-               a' = extendTo 0 r' r' a
-               b' = extendTo 0 r' r' b
+               a' = setSize 0 r' r' a
+               b' = setSize 0 r' r' b
            in  submatrix 1 r 1 r $ strassenMixed a' b'
  | otherwise = joinBlocks (c11,c12,c21,c22)
  where
@@ -603,8 +614,8 @@ multStrassenMixed a1@(M n m _) a2@(M n' m' _)
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2 = if even mx then mx else mx+1
-           b1 = extendTo 0 n2 n2 a1
-           b2 = extendTo 0 n2 n2 a2
+           b1 = setSize 0 n2 n2 a1
+           b2 = setSize 0 n2 n2 a2
        in  submatrix 1 n 1 m' $ strassenMixed b1 b2
 
 -------------------------------------------------------
@@ -943,3 +954,4 @@ detLU :: (Ord a, Fractional a) => Matrix a -> a
 detLU m = case luDecomp m of
   Just (u,_,_,d) -> d * diagProd u
   Nothing -> 0
+
