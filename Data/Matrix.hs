@@ -21,6 +21,7 @@ module Data.Matrix (
   , getElem , (!) , safeGet
   , getRow  , getCol
   , getDiag
+  , getMatrixAsVector
     -- * Manipulating matrices
   , setElem
   , transpose , setSize , extendTo
@@ -314,6 +315,12 @@ getDiag :: Matrix a -> V.Vector a
 getDiag m = V.generate k $ \i -> m ! (i+1,i+1)
  where
   k = min (nrows m) (ncols m)
+
+-- | /O(1)/. Transform a 'Matrix' to a 'V.Vector' of size /rows*cols/.
+--  This is equivalent to get all the rows of the matrix using 'getRow'
+--  and then append them, but far more efficient.
+getMatrixAsVector :: Matrix a -> V.Vector a
+getMatrixAsVector = mvect
 
 -------------------------------------------------------
 -------------------------------------------------------

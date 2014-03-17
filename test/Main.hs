@@ -2,6 +2,7 @@
 import Data.Matrix
 import Data.Ratio
 import Control.Applicative
+import Data.Monoid (mconcat)
 
 import Test.Tasty
 import qualified Test.Tasty.QuickCheck as QC
@@ -57,6 +58,8 @@ main :: IO ()
 main = defaultMain $ testGroup "matrix tests" [
     QC.testProperty "identity * m = m * identity = m"
        $ \(Sq m) -> let n = nrows m in identity n * m == m && m * identity n == m
+  , QC.testProperty "getMatrixAsVector m = mconcat [ getRow i m | i <- [1 .. nrows m]]"
+      $ \m -> getMatrixAsVector (m :: Matrix R) == mconcat [ getRow i m | i <- [1 .. nrows m] ]
   , QC.testProperty "permMatrix n i j * permMatrix n i j = identity n"
        $ \(I n) -> forAll (choose (1,n))
        $ \i     -> forAll (choose (1,n))
