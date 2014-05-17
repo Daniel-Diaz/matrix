@@ -24,6 +24,7 @@ module Data.Matrix (
   , getMatrixAsVector
     -- * Manipulating matrices
   , setElem
+  , unsafeSet
   , transpose , setSize , extendTo
   , mapRow , mapCol
     -- * Submatrices
@@ -338,7 +339,12 @@ getMatrixAsVector = mvect
 ---- MANIPULATING MATRICES
 
 msetElem:: PrimMonad m => a -> Int -> (Int,Int) -> MV.MVector (PrimState m) a -> m ()
+{-# INLINE msetElem #-}
 msetElem x m p v = MV.write v (encode m p) x
+
+unsafeMset:: PrimMonad m => a -> Int -> (Int,Int) -> MV.MVector (PrimState m) a -> m ()
+{-# INLINE unsafeMset #-}
+unsafeMset x m p v = MV.unsafeWrite v (encode m p) x
 
 -- | /O(1)/. Replace the value of a cell in a matrix.
 setElem :: a -- ^ New value.
@@ -346,6 +352,13 @@ setElem :: a -- ^ New value.
         -> Matrix a -- ^ Original matrix.
         -> Matrix a -- ^ Matrix with the given position replaced with the given value.
 setElem x p (M n m v) = M n m $ V.modify (msetElem x m p) v
+
+-- | /O(1)/. Unsafe variant of 'setElem', without bounds checking.
+unsafeSet :: a -- ^ New value.
+        -> (Int,Int) -- ^ Position to replace.
+        -> Matrix a -- ^ Original matrix.
+        -> Matrix a -- ^ Matrix with the given position replaced with the given value.
+unsafeSet x p (M n m v) = M n m $ V.modify (unsafeMset x m p) v
 
 -- | /O(rows*cols)/. The transpose of a matrix.
 --   Example:
