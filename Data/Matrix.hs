@@ -18,12 +18,13 @@ module Data.Matrix (
   , identity
   , permMatrix
     -- * Accessing
-  , getElem , (!) , safeGet
+  , getElem , (!) , unsafeGet , safeGet
   , getRow  , getCol
   , getDiag
   , getMatrixAsVector
     -- * Manipulating matrices
   , setElem
+  , unsafeSet
   , transpose , setSize , extendTo
   , mapRow , mapCol
     -- * Submatrices
@@ -288,19 +289,30 @@ getElem :: Int      -- ^ Row
         -> Int      -- ^ Column
         -> Matrix a -- ^ Matrix
         -> a
-{-# INLINE getElem #-}
-getElem i j (M _ m v) = V.unsafeIndex v $ encode m (i,j)
+getElem i j a@(M n m _)
+  | i > n || j > m || i < 1 || j < 1 =
+    error $ "Trying to get the " ++ show (i,j) ++ " element from a "
+    ++ sizeStr n m ++ " matrix."
+  | otherwise = unsafeGet i j a
+
+-- | /O(1)/. Unsafe variant of 'getElem', without bounds checking.
+unsafeGet :: Int      -- ^ Row
+          -> Int      -- ^ Column
+          -> Matrix a -- ^ Matrix
+          -> a
+{-# INLINE unsafeGet #-}
+unsafeGet i j (M _ m v) = V.unsafeIndex v $ encode m (i,j)
 
 -- | Short alias for 'getElem'.
-{-# INLINE (!) #-}
 (!) :: Matrix a -> (Int,Int) -> a
+{-# INLINE (!) #-}
 m ! (i,j) = getElem i j m
 
--- | Safe variant of 'getElem'.
+-- | Variant of 'getElem' that returns Maybe instead of an error.
 safeGet :: Int -> Int -> Matrix a -> Maybe a
 safeGet i j a@(M n m _)
  | i > n || j > m || i < 1 || j < 1 = Nothing
- | otherwise = Just $ getElem i j a
+ | otherwise = Just $ unsafeGet i j a
 
 -- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
@@ -327,7 +339,12 @@ getMatrixAsVector = mvect
 ---- MANIPULATING MATRICES
 
 msetElem:: PrimMonad m => a -> Int -> (Int,Int) -> MV.MVector (PrimState m) a -> m ()
+{-# INLINE msetElem #-}
 msetElem x m p v = MV.write v (encode m p) x
+
+unsafeMset:: PrimMonad m => a -> Int -> (Int,Int) -> MV.MVector (PrimState m) a -> m ()
+{-# INLINE unsafeMset #-}
+unsafeMset x m p v = MV.unsafeWrite v (encode m p) x
 
 -- | /O(1)/. Replace the value of a cell in a matrix.
 setElem :: a -- ^ New value.
@@ -335,6 +352,13 @@ setElem :: a -- ^ New value.
         -> Matrix a -- ^ Original matrix.
         -> Matrix a -- ^ Matrix with the given position replaced with the given value.
 setElem x p (M n m v) = M n m $ V.modify (msetElem x m p) v
+
+-- | /O(1)/. Unsafe variant of 'setElem', without bounds checking.
+unsafeSet :: a -- ^ New value.
+        -> (Int,Int) -- ^ Position to replace.
+        -> Matrix a -- ^ Original matrix.
+        -> Matrix a -- ^ Matrix with the given position replaced with the given value.
+unsafeSet x p (M n m v) = M n m $ V.modify (unsafeMset x m p) v
 
 -- | /O(rows*cols)/. The transpose of a matrix.
 --   Example:
@@ -858,14 +882,14 @@ recLUDecomp' u l p q d e k n =
   u' = switchCols k j $ switchRows k i u
   l'0 = M (nrows l) (ncols l) $
         V.modify (\mv -> forM_ [1..k-1] $ \ h -> do
-                     msetElem (l ! (k,h)) (ncols l) (i,h) mv
-                     msetElem (l ! (i,h)) (ncols l) (k,h) mv
+                     unsafeMset (l ! (k,h)) (ncols l) (i,h) mv
+                     unsafeMset (l ! (i,h)) (ncols l) (k,h) mv
                  )
         $ mvect l
   l'  = M (nrows l) (ncols l) $
         V.modify (\mv -> forM_ [1..k-1] $ \h -> do
-                     msetElem (l'0 ! (h,k)) (ncols l) (h,i) mv
-                     msetElem (l'0 ! (h,i)) (ncols l) (h,k) mv
+                     unsafeMset (l'0 ! (h,k)) (ncols l) (h,i) mv
+                     unsafeMset (l'0 ! (h,i)) (ncols l) (h,k) mv
                  )
         $ mvect l'0
   p' = switchRows k i p
