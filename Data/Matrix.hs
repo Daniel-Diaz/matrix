@@ -882,14 +882,14 @@ recLUDecomp' u l p q d e k n =
   u' = switchCols k j $ switchRows k i u
   l'0 = M (nrows l) (ncols l) $
         V.modify (\mv -> forM_ [1..k-1] $ \ h -> do
-                     msetElem (l ! (k,h)) (ncols l) (i,h) mv
-                     msetElem (l ! (i,h)) (ncols l) (k,h) mv
+                     unsafeMset (l ! (k,h)) (ncols l) (i,h) mv
+                     unsafeMset (l ! (i,h)) (ncols l) (k,h) mv
                  )
         $ mvect l
   l'  = M (nrows l) (ncols l) $
         V.modify (\mv -> forM_ [1..k-1] $ \h -> do
-                     msetElem (l'0 ! (h,k)) (ncols l) (h,i) mv
-                     msetElem (l'0 ! (h,i)) (ncols l) (h,k) mv
+                     unsafeMset (l'0 ! (h,k)) (ncols l) (h,i) mv
+                     unsafeMset (l'0 ! (h,i)) (ncols l) (h,k) mv
                  )
         $ mvect l'0
   p' = switchRows k i p
