@@ -18,7 +18,7 @@ module Data.Matrix (
   , identity
   , permMatrix
     -- * Accessing
-  , getElem , (!) , safeGet
+  , getElem , (!) , unsafeGet , safeGet
   , getRow  , getCol
   , getDiag
   , getMatrixAsVector
@@ -288,19 +288,30 @@ getElem :: Int      -- ^ Row
         -> Int      -- ^ Column
         -> Matrix a -- ^ Matrix
         -> a
-{-# INLINE getElem #-}
-getElem i j (M _ m v) = V.unsafeIndex v $ encode m (i,j)
+getElem i j a@(M n m _)
+  | i > n || j > m || i < 1 || j < 1 =
+    error $ "Trying to get the " ++ show (i,j) ++ " element from a "
+    ++ sizeStr n m ++ " matrix."
+  | otherwise = unsafeGet i j a
+
+-- | /O(1)/. Unsafe variant of 'getElem', without bounds checking.
+unsafeGet :: Int      -- ^ Row
+          -> Int      -- ^ Column
+          -> Matrix a -- ^ Matrix
+          -> a
+{-# INLINE unsafeGet #-}
+unsafeGet i j (M _ m v) = V.unsafeIndex v $ encode m (i,j)
 
 -- | Short alias for 'getElem'.
-{-# INLINE (!) #-}
 (!) :: Matrix a -> (Int,Int) -> a
+{-# INLINE (!) #-}
 m ! (i,j) = getElem i j m
 
--- | Safe variant of 'getElem'.
+-- | Variant of 'getElem' that returns Maybe instead of an error.
 safeGet :: Int -> Int -> Matrix a -> Maybe a
 safeGet i j a@(M n m _)
  | i > n || j > m || i < 1 || j < 1 = Nothing
- | otherwise = Just $ getElem i j a
+ | otherwise = Just $ unsafeGet i j a
 
 -- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
