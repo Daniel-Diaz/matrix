@@ -236,16 +236,24 @@ fromList :: Int -- ^ Rows
 fromList n m = M n m . V.fromListN (n*m)
 
 -- | Create a matrix from an non-empty list of non-empty lists.
---   /Each list must have the same number of elements/.
---   For example:
+--   /Each list must have at least as many elements as the first list/.
+--   Examples:
 --
 -- > fromLists [ [1,2,3]      ( 1 2 3 )
 -- >           , [4,5,6]      ( 4 5 6 )
 -- >           , [7,8,9] ] =  ( 7 8 9 )
 --
+-- > fromLists [ [1,2,3  ]     ( 1 2 3 )
+-- >           , [4,5,6,7]     ( 4 5 6 )
+-- >           , [8,9,0  ] ] = ( 8 9 0 )
+--
 fromLists :: [[a]] -> Matrix a
 {-# INLINE fromLists #-}
-fromLists xss = fromList (length xss) (length $ head xss) $ concat xss
+fromLists [] = error "fromLists: empty list."
+fromLists (xs:xss) = fromList n m $ concat $ xs : fmap (take m) xss
+  where
+    n = 1 + length xss
+    m = length xs
 
 -- | /O(1)/. Represent a vector as a one row matrix.
 rowVector :: V.Vector a -> Matrix a
