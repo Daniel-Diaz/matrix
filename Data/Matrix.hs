@@ -90,6 +90,11 @@ decode m k = (q+1,r+1)
   (q,r) = quotRem k m
 
 -- | Type of matrices.
+--
+--   Elements can be of any type. Rows and columns
+--   are indexed starting by 1. This means that, if @m :: Matrix a@ and
+--   @i,j :: Int@, then @m ! (i,j)@ is the element in the @i@-th row and
+--   @j@-th column of @m@.
 data Matrix a = M {
    nrows :: {-# UNPACK #-} !Int -- ^ Number of rows.
  , ncols :: {-# UNPACK #-} !Int -- ^ Number of columns.
@@ -116,7 +121,7 @@ instance NFData a => NFData (Matrix a) where
 
 -- | /O(rows*cols)/. Similar to 'V.force', drop any extra memory.
 --
---   Useful when using 'submatrix' from a big matrix.
+--   Useful when using 'getRow' from a big matrix.
 forceMatrix :: Matrix a -> Matrix a
 forceMatrix (M n m v) = M n m $ V.force v
 
@@ -346,14 +351,14 @@ unsafeMset:: PrimMonad m => a -> Int -> (Int,Int) -> MV.MVector (PrimState m) a 
 {-# INLINE unsafeMset #-}
 unsafeMset x m p v = MV.unsafeWrite v (encode m p) x
 
--- | /O(1)/. Replace the value of a cell in a matrix.
+-- | Replace the value of a cell in a matrix.
 setElem :: a -- ^ New value.
         -> (Int,Int) -- ^ Position to replace.
         -> Matrix a -- ^ Original matrix.
         -> Matrix a -- ^ Matrix with the given position replaced with the given value.
 setElem x p (M n m v) = M n m $ V.modify (msetElem x m p) v
 
--- | /O(1)/. Unsafe variant of 'setElem', without bounds checking.
+-- | Unsafe variant of 'setElem', without bounds checking.
 unsafeSet :: a -- ^ New value.
         -> (Int,Int) -- ^ Position to replace.
         -> Matrix a -- ^ Original matrix.
@@ -378,6 +383,11 @@ transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 -- >                ( 1 2 3 )   ( 4 5 6 0 0 )
 -- >                ( 4 5 6 )   ( 7 8 9 0 0 )
 -- > extendTo 0 4 5 ( 7 8 9 ) = ( 0 0 0 0 0 )
+--
+-- The definition of 'extendTo' is based on 'setSize':
+--
+-- > extendTo e n m a = setSize e (max n $ nrows a) (max m $ ncols a) a
+--
 extendTo :: a   -- ^ Element to add when extending.
          -> Int -- ^ Minimal number of rows.
          -> Int -- ^ Minimal number of columns.
@@ -435,7 +445,7 @@ minorMatrix :: Int -- ^ Row @r@ to remove.
 minorMatrix r c (M n m v) =
  M (n-1) (m-1) $ V.ifilter (\k _ -> let (i,j) = decode m k in i /= r && j /= c) v
 
--- | Make a block-partition of a matrix using a given element as reference.
+-- | /O(rows*cols)/. Make a block-partition of a matrix using a given element as reference.
 --   The element will stay in the bottom-right corner of the top-left corner matrix.
 --
 -- >                 (             )   (      |      )
@@ -463,8 +473,12 @@ splitBlocks :: Int      -- ^ Row of the splitting element.
 splitBlocks i j a@(M n m _) = ( submatrix    1  i 1 j a , submatrix    1  i (j+1) m a
                               , submatrix (i+1) n 1 j a , submatrix (i+1) n (j+1) m a )
 
-
--- | Join blocks of the form detailed in 'splitBlocks'.
+-- | Join blocks of the form detailed in 'splitBlocks'. Precisely:
+--
+-- > joinBlocks (tl,tr,bl,br) =
+-- >   (tl <|> tr)
+-- >       <->
+-- >   (bl <|> br)
 joinBlocks :: (Matrix a,Matrix a,Matrix a,Matrix a) -> Matrix a
 joinBlocks (tl,tr,bl,br) = (tl <|> tr)
                                <->
@@ -506,7 +520,7 @@ joinBlocks (tl,tr,bl,br) = (tl <|> tr)
 -------------------------------------------------------
 ---- MATRIX OPERATIONS
 
--- | Perform an operation elementwise. The input matrices are assumed
+-- | Perform an operation element-wise. The input matrices are assumed
 --   to have the same dimensions, but this is not checked.
 elementwise :: (a -> b -> c) -> (Matrix a -> Matrix b -> Matrix c)
 elementwise f (M n m v) (M _ _ v') = M n m $ V.zipWith f v v'
