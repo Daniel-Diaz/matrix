@@ -235,7 +235,7 @@ fromList :: Int -- ^ Rows
 {-# INLINE fromList #-}
 fromList n m = M n m . V.fromListN (n*m)
 
--- | Create a matrix from an non-empty list of non-empty lists.
+-- | Create a matrix from a non-empty list of non-empty lists.
 --   /Each list must have at least as many elements as the first list/.
 --   Examples:
 --
