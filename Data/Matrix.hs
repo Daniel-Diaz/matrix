@@ -975,6 +975,8 @@ switchCols c1 c2 (M n m ro co w vs) = M n m ro co w $ V.modify (\mv -> do
 -- >          ( 1 2 0 )     ( 2 0  2 )   (   1 0 0 )   ( 0 0 1 )
 -- >          ( 0 2 1 )     ( 0 2 -1 )   ( 1/2 1 0 )   ( 1 0 0 )
 -- > luDecomp ( 2 0 2 ) = ( ( 0 0  2 ) , (   0 1 1 ) , ( 0 1 0 ) , 1 )
+--
+--   'Nothing' is returned if no LU decomposition exists.
 luDecomp :: (Ord a, Fractional a) => Matrix a -> Maybe (Matrix a,Matrix a,Matrix a,a)
 luDecomp a = recLUDecomp a i i 1 1 n
  where
@@ -1053,6 +1055,8 @@ luDecompUnsafe m = case luDecomp m of
 -- >           ( 1 0 )     ( 2 1 )   (   1    0 0 )   ( 0 0 1 )
 -- >           ( 0 2 )     ( 0 2 )   (   0    1 0 )   ( 0 1 0 )   ( 1 0 )
 -- > luDecomp' ( 2 1 ) = ( ( 0 0 ) , ( 1/2 -1/4 1 ) , ( 1 0 0 ) , ( 0 1 ) , -1 , 1 )
+--
+--   'Nothing' is returned if no LU decomposition exists.
 luDecomp' :: (Ord a, Fractional a) => Matrix a -> Maybe (Matrix a,Matrix a,Matrix a,Matrix a,a,a)
 luDecomp' a = recLUDecomp' a i i (identity $ ncols a) 1 1 1 n
  where
