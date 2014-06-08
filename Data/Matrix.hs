@@ -36,7 +36,7 @@ module Data.Matrix (
   , (<|>) , (<->)
   , joinBlocks
     -- * Matrix operations
-  , elementwise
+  , elementwise, elementwiseUnsafe
     -- * Matrix multiplication
     -- ** About matrix multiplication
     -- $mult
@@ -136,7 +136,7 @@ instance NFData a => NFData (Matrix a) where
 --   Useful when using 'submatrix' from a big matrix.
 --
 forceMatrix :: Matrix a -> Matrix a
-forceMatrix m = matrix (nrows m) (ncols m) $ \(i,j) -> m ! (i,j)
+forceMatrix m = matrix (nrows m) (ncols m) $ \(i,j) -> unsafeGet i j m
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -223,7 +223,16 @@ matrix :: Int -- ^ Rows
        -> ((Int,Int) -> a) -- ^ Generator function
        -> Matrix a
 {-# INLINE matrix #-}
-matrix n m f = M n m 0 0 m $ V.generate (n*m) $ f . decode m
+-- matrix n m f = M n m 0 0 m $ V.generate (n*m) $ f . decode m
+matrix n m f = M n m 0 0 m $ V.create $ do
+  v <- MV.new $ n * m
+  let en = encode m
+  sequence_
+    [ MV.unsafeWrite v (en (i,j)) (f (i,j))
+    | i <- [1 .. n]
+    , j <- [1 .. m]
+      ]
+  return v
 
 -- | /O(rows*cols)/. Identity matrix of the given order.
 --
@@ -346,6 +355,11 @@ unsafeGet i j (M _ _ ro co w v) = V.unsafeIndex v $ encode w (i+ro,j+co)
 (!) :: Matrix a -> (Int,Int) -> a
 {-# INLINE (!) #-}
 m ! (i,j) = getElem i j m
+
+-- | Internal alias for 'unsafeGet'.
+(!.) :: Matrix a -> (Int,Int) -> a
+{-# INLINE (!.) #-}
+m !. (i,j) = unsafeGet i j m
 
 -- | Variant of 'getElem' that returns Maybe instead of an error.
 safeGet :: Int -> Int -> Matrix a -> Maybe a
@@ -572,11 +586,35 @@ m <-> m' =
 -------------------------------------------------------
 ---- MATRIX OPERATIONS
 
--- | Perform an operation element-wise. The input matrices are assumed
---   to have the same dimensions, but this is not checked.
+-- | Perform an operation element-wise.
+--   The second matrix must have at least as many rows
+--   and columns as the first matrix. If it's bigger,
+--   the leftover items will be ignored.
+--   If it's smaller, it will cause a run-time error.
+--   You may want to use 'elementwiseUnsafe' if you
+--   are definitely sure that a run-time error won't
+--   arise.
 elementwise :: (a -> b -> c) -> (Matrix a -> Matrix b -> Matrix c)
 elementwise f m m' = matrix (nrows m) (ncols m) $
-  \(i,j) -> f (m ! (i,j)) (m' ! (i,j))
+  \k -> f (m ! k) (m' ! k)
+
+-- | Unsafe version of 'elementwise', but faster.
+elementwiseUnsafe :: (a -> b -> c) -> (Matrix a -> Matrix b -> Matrix c)
+{-# INLINE elementwiseUnsafe #-}
+elementwiseUnsafe f m m' = matrix (nrows m) (ncols m) $
+  \(i,j) -> f (unsafeGet i j m) (unsafeGet i j m')
+
+infixl 6 +., -.
+
+-- | Internal unsafe addition.
+(+.) :: Num a => Matrix a -> Matrix a -> Matrix a
+{-# INLINE (+.) #-}
+(+.) = elementwiseUnsafe (+)
+
+-- | Internal unsafe substraction.
+(-.) :: Num a => Matrix a -> Matrix a -> Matrix a
+{-# INLINE (-.) #-}
+(-.) = elementwiseUnsafe (-)
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -594,8 +632,8 @@ Four methods are provided for matrix multiplication.
 * 'multStd2':
      Matrix multiplication following directly the definition.
      However, using a different definition from 'multStd'.
-     Some benchmarks show 'multStd2' beats in performance
-     to 'multStd' when the size of the matrix is around 100x100.
+     According to our benchmarks with this version, 'multStd2' is
+     around 3 times faster than 'multStd'.
 
 * 'multStrassen':
      Matrix multiplication following the Strassen's algorithm.
@@ -643,11 +681,11 @@ multStd_ a@(M 1 1 _ _ _ _) b@(M 1 1 _ _ _ _) = M 1 1 0 0 1 $ V.singleton $ (a ! 
 multStd_ a@(M 2 2 _ _ _ _) b@(M 2 2 _ _ _ _) =
   M 2 2 0 0 2 $
     let -- A
-        a11 = a ! (1,1) ; a12 = a ! (1,2)
-        a21 = a ! (2,1) ; a22 = a ! (2,2)
+        a11 = a !. (1,1) ; a12 = a !. (1,2)
+        a21 = a !. (2,1) ; a22 = a !. (2,2)
         -- B
-        b11 = b ! (1,1) ; b12 = b ! (1,2)
-        b21 = b ! (2,1) ; b22 = b ! (2,2)
+        b11 = b !. (1,1) ; b12 = b !. (1,2)
+        b21 = b !. (2,1) ; b22 = b !. (2,2)
     in V.fromList 
          [ a11*b11 + a12*b21 , a11*b12 + a12*b22
          , a21*b11 + a22*b21 , a21*b12 + a22*b22
@@ -655,19 +693,19 @@ multStd_ a@(M 2 2 _ _ _ _) b@(M 2 2 _ _ _ _) =
 multStd_ a@(M 3 3 _ _ _ _) b@(M 3 3 _ _ _ _) =
   M 3 3 0 0 3 $
     let -- A
-        a11 = a ! (1,1) ; a12 = a ! (1,2) ; a13 = a ! (1,3)
-        a21 = a ! (2,1) ; a22 = a ! (2,2) ; a23 = a ! (2,3)
-        a31 = a ! (3,1) ; a32 = a ! (3,2) ; a33 = a ! (3,3)
+        a11 = a !. (1,1) ; a12 = a !. (1,2) ; a13 = a !. (1,3)
+        a21 = a !. (2,1) ; a22 = a !. (2,2) ; a23 = a !. (2,3)
+        a31 = a !. (3,1) ; a32 = a !. (3,2) ; a33 = a !. (3,3)
         -- B
-        b11 = b ! (1,1) ; b12 = b ! (1,2) ; b13 = b ! (1,3)
-        b21 = b ! (2,1) ; b22 = b ! (2,2) ; b23 = b ! (2,3)
-        b31 = b ! (3,1) ; b32 = b ! (3,2) ; b33 = b ! (3,3)
+        b11 = b !. (1,1) ; b12 = b !. (1,2) ; b13 = b !. (1,3)
+        b21 = b !. (2,1) ; b22 = b !. (2,2) ; b23 = b !. (2,3)
+        b31 = b !. (3,1) ; b32 = b !. (3,2) ; b33 = b !. (3,3)
     in V.fromList
          [ a11*b11 + a12*b21 + a13*b31 , a11*b12 + a12*b22 + a13*b32 , a11*b13 + a12*b23 + a13*b33
          , a21*b11 + a22*b21 + a23*b31 , a21*b12 + a22*b22 + a23*b32 , a21*b13 + a22*b23 + a23*b33
          , a31*b11 + a32*b21 + a33*b31 , a31*b12 + a32*b22 + a33*b32 , a31*b13 + a32*b23 + a33*b33
            ]
-multStd_ a@(M n m _ _ _ _) b@(M _ m' _ _ _ _) = matrix n m' $ \(i,j) -> sum [ a ! (i,k) * b ! (k,j) | k <- [1 .. m] ]
+multStd_ a@(M n m _ _ _ _) b@(M _ m' _ _ _ _) = matrix n m' $ \(i,j) -> sum [ a !. (i,k) * b !. (k,j) | k <- [1 .. m] ]
 
 multStd__ :: Num a => Matrix a -> Matrix a -> Matrix a
 {-# INLINE multStd__ #-}
@@ -731,7 +769,7 @@ multStrassen a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 2 ^ (9 :: Int)
+strmixFactor = 400
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -744,7 +782,52 @@ strassenMixed a b
                a' = setSize 0 r' r' a
                b' = setSize 0 r' r' b
            in  submatrix 1 r 1 r $ strassenMixed a' b'
- | otherwise = joinBlocks (c11,c12,c21,c22)
+ | otherwise =
+      M r r 0 0 r $ V.create $ do
+         v <- MV.unsafeNew (r*r)
+         let en = encode r
+             n' = n + 1
+         -- c11 = p1 + p4 - p5 + p7
+         sequence_ [ MV.write v k $
+                         unsafeGet i j p1
+                       + unsafeGet i j p4
+                       - unsafeGet i j p5
+                       + unsafeGet i j p7
+                   | i <- [1..n]
+                   , j <- [1..n]
+                   , let k = en (i,j)
+                     ]
+         -- c12 = p3 + p5
+         sequence_ [ MV.write v k $
+                         unsafeGet i j' p3
+                       + unsafeGet i j' p5
+                   | i <- [1..n]
+                   , j <- [n'..r]
+                   , let k = en (i,j)
+                   , let j' = j - n
+                     ]
+         -- c21 = p2 + p4
+         sequence_ [ MV.write v k $
+                         unsafeGet i' j p2
+                       + unsafeGet i' j p4
+                   | i <- [n'..r]
+                   , j <- [1..n]
+                   , let k = en (i,j)
+                   , let i' = i - n
+                     ]
+         -- c22 = p1 - p2 + p3 + p6
+         sequence_ [ MV.write v k $
+                         unsafeGet i' j' p1
+                       - unsafeGet i' j' p2
+                       + unsafeGet i' j' p3
+                       + unsafeGet i' j' p6
+                   | i <- [n'..r]
+                   , j <- [n'..r]
+                   , let k = en (i,j)
+                   , let i' = i - n
+                   , let j' = j - n
+                     ]
+         return v
  where
   r = nrows a
   -- Size of the subproblem is halved.
@@ -753,18 +836,13 @@ strassenMixed a b
   (a11,a12,a21,a22) = splitBlocks n n a
   (b11,b12,b21,b22) = splitBlocks n n b
   -- The seven Strassen's products.
-  p1 = strassenMixed (a11 + a22) (b11 + b22)
-  p2 = strassenMixed (a21 + a22)  b11
-  p3 = strassenMixed  a11        (b12 - b22)
-  p4 = strassenMixed        a22  (b21 - b11)
-  p5 = strassenMixed (a11 + a12)        b22
-  p6 = strassenMixed (a21 - a11) (b11 + b12)
-  p7 = strassenMixed (a12 - a22) (b21 + b22)
-  -- Merging blocks
-  c11 = p1 + p4 - p5 + p7
-  c12 = p3 + p5
-  c21 = p2 + p4
-  c22 = p1 - p2 + p3 + p6
+  p1 = strassenMixed (a11 +. a22) (b11 +. b22)
+  p2 = strassenMixed (a21 +. a22)  b11
+  p3 = strassenMixed  a11         (b12 -. b22)
+  p4 = strassenMixed         a22  (b21 -. b11)
+  p5 = strassenMixed (a11 +. a12)         b22
+  p6 = strassenMixed (a21 -. a11) (b11 +. b12)
+  p7 = strassenMixed (a12 -. a22) (b21 +. b22)
 
 -- | Mixed Strassen's matrix multiplication.
 multStrassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
@@ -772,7 +850,7 @@ multStrassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
 multStrassenMixed a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
-   | n < strmixFactor = multStd_ a1 a2
+   | n < strmixFactor = multStd__ a1 a2
    | otherwise =
        let mx = maximum [n,m,n',m']
            n2 = if even mx then mx else mx+1

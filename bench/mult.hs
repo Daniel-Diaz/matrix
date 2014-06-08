@@ -4,7 +4,7 @@ import Criterion.Main
 import Data.Matrix
 
 mat :: Int -> Matrix Int
-mat n = matrix n n $ \(i,j) -> i - j
+mat n = fromList n n [1..]
 
 testdef :: Int -> Matrix Int
 testdef n = multStd (mat n) (mat n)

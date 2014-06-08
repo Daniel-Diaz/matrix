@@ -62,8 +62,12 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \m1 -> forAll (genMatrix b c)
        $ \m2 -> forAll (genMatrix c d)
        $ \m3 -> m1 * (m2 * m3) == (m1 * m2) * m3
+  , QC.testProperty "multStd a b = multStd2 a b"
+       $ \(I a) (I b) (I c) -> forAll (genMatrix a b)
+       $ \m1 -> forAll (genMatrix b c)
+       $ \m2 -> multStd m1 m2 == multStd2 m1 m2
   , QC.testProperty "getMatrixAsVector m = mconcat [ getRow i m | i <- [1 .. nrows m]]"
-      $ \m -> getMatrixAsVector (m :: Matrix R) == mconcat [ getRow i m | i <- [1 .. nrows m] ]
+       $ \m -> getMatrixAsVector (m :: Matrix R) == mconcat [ getRow i m | i <- [1 .. nrows m] ]
   , QC.testProperty "permMatrix n i j * permMatrix n i j = identity n"
        $ \(I n) -> forAll (choose (1,n))
        $ \i     -> forAll (choose (1,n))
