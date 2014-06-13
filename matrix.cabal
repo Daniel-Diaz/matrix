@@ -1,5 +1,5 @@
 Name: matrix
-Version: 0.3.3.0
+Version: 0.3.3.1
 Author: Daniel Díaz
 Category: Math
 Build-type: Simple
@@ -28,13 +28,24 @@ Source-repository head
   type: git
   location: git://github.com/Daniel-Diaz/matrix.git
 
+Flag dev
+  Description: Add flags aimed to developers. See cabal
+               file for details.
+  Default: False
+  Manual: True
+
 Library
   Build-depends: base == 4.*
                , vector >= 0.10 && < 0.11
                , deepseq >= 1.3.0.0 && < 1.4
                , primitive >= 0.5 && < 0.6
   Exposed-modules: Data.Matrix
-  GHC-Options: -Wall -O2
+  GHC-Options: -Wall -O2 -fstatic-argument-transformation
+  if flag(dev)
+    GHC-Options: -ddump-to-file
+                 -ddump-asm -ddump-cmm -ddump-simpl
+                 -ddump-simpl-stats
+                 -fforce-recomp
 
 Benchmark matrix-mult
   type: exitcode-stdio-1.0
@@ -43,7 +54,7 @@ Benchmark matrix-mult
   build-depends: base == 4.*
                , matrix
                , criterion
-  ghc-options: -O2
+  ghc-options: -O2 -fstatic-argument-transformation
 
 Test-Suite matrix-test
   type: exitcode-stdio-1.0

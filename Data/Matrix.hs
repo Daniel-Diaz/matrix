@@ -723,11 +723,30 @@ dotProduct v1 v2 = go (V.length v1 - 1) 0
     go (-1) a = a
     go i a = go (i-1) $ (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
 
+{-
+
+About dotProduct
+
+Adding more strictness to dotProduct, concretely writing
+
+    go i a = go (i-1) $! (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
+                       ^
+
+instead of
+
+    go i a = go (i-1) $  (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
+
+makes dotProduct use much less memory, but also slows it down a little bit.
+We have chosen speed over space here, adding this note here to help in future
+decisions.
+
+-}
+
 first :: (a -> Bool) -> [a] -> a
 first f = go
  where
   go (x:xs) = if f x then x else go xs
-  go [] = error "first: no element match the condition."
+  go _ = error "first: no element match the condition."
 
 -- | Strassen's algorithm over square matrices of order @2^n@.
 strassen :: Num a => Matrix a -> Matrix a -> Matrix a
