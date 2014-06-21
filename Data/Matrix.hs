@@ -66,6 +66,7 @@ module Data.Matrix (
 -- Classes
 import Control.DeepSeq
 import Control.Monad    (forM_)
+import Control.Loop     (numLoop,numLoopFold)
 import Data.Foldable    (Foldable (..))
 import Data.Monoid
 import Data.Traversable
@@ -223,15 +224,12 @@ matrix :: Int -- ^ Rows
        -> ((Int,Int) -> a) -- ^ Generator function
        -> Matrix a
 {-# INLINE matrix #-}
--- matrix n m f = M n m 0 0 m $ V.generate (n*m) $ f . decode m
 matrix n m f = M n m 0 0 m $ V.create $ do
   v <- MV.new $ n * m
   let en = encode m
-  sequence_
-    [ MV.unsafeWrite v (en (i,j)) (f (i,j))
-    | i <- [1 .. n]
-    , j <- [1 .. m]
-      ]
+  numLoop 1 n $
+    \i -> numLoop 1 m $
+    \j -> MV.unsafeWrite v (en (i,j)) (f (i,j))
   return v
 
 -- | /O(rows*cols)/. Identity matrix of the given order.
@@ -556,36 +554,14 @@ joinBlocks (tl,tr,bl,br) =
   in  M n' m' 0 0 m' $ V.create $ do
         v <- MV.new (n'*m')
         let wr = MV.write v
-        forM_ [1..n] $ \i -> do
-          forM_ [1..m ] $ \j -> wr (en (i  ,j  )) $ tl ! (i,j)
-          forM_ [1..mr] $ \j -> wr (en (i  ,j+m)) $ tr ! (i,j)
-        forM_ [1..nb] $ \i -> do
-          forM_ [1..m ] $ \j -> wr (en (i+n,j  )) $ bl ! (i,j)
-          forM_ [1..mr] $ \j -> wr (en (i+n,j+m)) $ br ! (i,j)
+        numLoop 1 n  $ \i -> do
+          numLoop 1 m  $ \j -> wr (en (i ,j  )) $ tl ! (i,j)
+          numLoop 1 mr $ \j -> wr (en (i ,j+m)) $ tr ! (i,j)
+        numLoop 1 nb $ \i -> do
+          let i' = i+n
+          numLoop 1 m  $ \j -> wr (en (i',j  )) $ bl ! (i,j)
+          numLoop 1 mr $ \j -> wr (en (i',j+m)) $ br ! (i,j)
         return v
-
-{-
-    f (i,j) | -- Top left matrix
-              i <= n && j <= m = tl ! (i,j)
-              -- We don't need to check j now since:
-              --
-              -- (i <= n) && not (i <= n && j <= m)
-              --  =                                                  De Morgan's Law
-              -- (i <= n) && (i > n || j > m)
-              --  =                                                  Distributivity of (&&) over (||)
-              -- ( (i <= n) && (i > n) ) || ( (i <= n) && (j > m) )
-              --  =                                                  Law of non-contradiction
-              --  False || ( (i <= n) && (j > m) )
-              --  =                                                  False is neutral element of monoid (Bool,(||))
-              -- (i <= n) && (j > m)
-              --
-              -- So we have (j > m) for free.
-            | i <= n           = tr ! (i  ,j-m)
-              -- By the previous condition, we now know that (i > n).
-            | j <= m           = bl ! (i-n,j  )
-              -- Otherwise, (i > n) && (j > m).
-            | otherwise        = br ! (i-n,j-m)
--}
 
 {-# RULES
 "matrix/splitAndJoin"
@@ -756,28 +732,14 @@ multStd__ a b = matrix r c $ \(i,j) -> dotProduct (V.unsafeIndex avs $ i - 1) (V
 
 dotProduct :: Num a => V.Vector a -> V.Vector a -> a
 {-# INLINE dotProduct #-}
+dotProduct v1 v2 = numLoopFold 0 (V.length v1 - 1) 0 $
+  \r i -> V.unsafeIndex v1 i * V.unsafeIndex v2 i + r
+
+{-
 dotProduct v1 v2 = go (V.length v1 - 1) 0
   where
     go (-1) a = a
     go i a = go (i-1) $ (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
-
-{-
-
-About dotProduct
-
-Adding more strictness to dotProduct, concretely writing
-
-    go i a = go (i-1) $! (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
-                       ^
-
-instead of
-
-    go i a = go (i-1) $  (V.unsafeIndex v1 i) * (V.unsafeIndex v2 i) + a
-
-makes dotProduct use much less memory, but also slows it down a little bit.
-We have chosen speed over space here, adding this note here to help in future
-decisions.
-
 -}
 
 first :: (a -> Bool) -> [a] -> a
@@ -983,7 +945,7 @@ switchRows :: Int -- ^ Row 1.
            -> Matrix a -- ^ Original matrix.
            -> Matrix a -- ^ Matrix with rows 1 and 2 switched.
 switchRows r1 r2 (M n m ro co w vs) = M n m ro co w $ V.modify (\mv -> do
-  forM_ [1..m] $ \j ->
+  numLoop 1 m $ \j ->
     MV.swap mv (encode w (r1+ro,j+co)) (encode w (r2+ro,j+co))) vs
 
 -- | Switch two coumns of a matrix.
@@ -997,7 +959,7 @@ switchCols :: Int -- ^ Col 1.
            -> Matrix a -- ^ Original matrix.
            -> Matrix a -- ^ Matrix with cols 1 and 2 switched.
 switchCols c1 c2 (M n m ro co w vs) = M n m ro co w $ V.modify (\mv -> do
-  forM_ [1..n] $ \j ->
+  numLoop 1 n $ \j ->
     MV.swap mv (encode m (j+ro,c1+co)) (encode m (j+ro,c2+co))) vs
 
 -------------------------------------------------------
@@ -1057,16 +1019,16 @@ recLUDecomp u l p d k n =
   i  = maximumBy (\x y -> compare (abs $ u ! (x,k)) (abs $ u ! (y,k))) [ k .. n ]
   -- Switching to place pivot in current row.
   u' = switchRows k i u
-  -- l' = switchRows k i l
   l' = let lw = vcols l
+           en = encode lw
            lro = rowOffset l
            lco = colOffset l
        in  if i == k
               then l
               else M (nrows l) (ncols l) lro lco lw $
-                     V.modify (\mv -> forM_ [1 .. k-1] $ 
-                                 \j -> MV.swap mv (encode lw (i+lro,j+lco))
-                                                  (encode lw (k+lro,j+lco))
+                     V.modify (\mv -> forM_ [1 .. (k-1)] $ 
+                                 \j -> MV.swap mv (en (i+lro,j+lco))
+                                                  (en (k+lro,j+lco))
                                 ) $ mvect l
   p' = switchRows k i p
   -- Permutation determinant
