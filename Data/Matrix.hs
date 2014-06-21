@@ -545,9 +545,47 @@ splitBlocks i j a@(M n m _ _ _ _) =
 -- >   (bl <|> br)
 joinBlocks :: (Matrix a,Matrix a,Matrix a,Matrix a) -> Matrix a
 {-# INLINE[1] joinBlocks #-}
-joinBlocks (tl,tr,bl,br) = (tl <|> tr)
-                               <->
-                           (bl <|> br)
+joinBlocks (tl,tr,bl,br) =
+  let n  = nrows tl
+      nb = nrows bl
+      n' = n + nb
+      m  = ncols tl
+      mr = ncols tr
+      m' = m + mr
+      en = encode m'
+  in  M n' m' 0 0 m' $ V.create $ do
+        v <- MV.new (n'*m')
+        let wr = MV.write v
+        forM_ [1..n] $ \i -> do
+          forM_ [1..m ] $ \j -> wr (en (i  ,j  )) $ tl ! (i,j)
+          forM_ [1..mr] $ \j -> wr (en (i  ,j+m)) $ tr ! (i,j)
+        forM_ [1..nb] $ \i -> do
+          forM_ [1..m ] $ \j -> wr (en (i+n,j  )) $ bl ! (i,j)
+          forM_ [1..mr] $ \j -> wr (en (i+n,j+m)) $ br ! (i,j)
+        return v
+
+{-
+    f (i,j) | -- Top left matrix
+              i <= n && j <= m = tl ! (i,j)
+              -- We don't need to check j now since:
+              --
+              -- (i <= n) && not (i <= n && j <= m)
+              --  =                                                  De Morgan's Law
+              -- (i <= n) && (i > n || j > m)
+              --  =                                                  Distributivity of (&&) over (||)
+              -- ( (i <= n) && (i > n) ) || ( (i <= n) && (j > m) )
+              --  =                                                  Law of non-contradiction
+              --  False || ( (i <= n) && (j > m) )
+              --  =                                                  False is neutral element of monoid (Bool,(||))
+              -- (i <= n) && (j > m)
+              --
+              -- So we have (j > m) for free.
+            | i <= n           = tr ! (i  ,j-m)
+              -- By the previous condition, we now know that (i > n).
+            | j <= m           = bl ! (i-n,j  )
+              -- Otherwise, (i > n) && (j > m).
+            | otherwise        = br ! (i-n,j-m)
+-}
 
 {-# RULES
 "matrix/splitAndJoin"
