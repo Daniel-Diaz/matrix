@@ -826,7 +826,7 @@ multStrassen a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
        in  submatrix 1 n 1 m' $ strassen b1 b2
 
 strmixFactor :: Int
-strmixFactor = 500
+strmixFactor = 300
 
 -- | Strassen's mixed algorithm.
 strassenMixed :: Num a => Matrix a -> Matrix a -> Matrix a
