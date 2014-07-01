@@ -96,7 +96,7 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \i -> forAll (choose (1,ncols m))
        $ \j -> joinBlocks (splitBlocks i j m) == (m :: Matrix R)
   , QC.testProperty "scaleMatrix k m = fmap (*k) m"
-       $ \k m -> scaleMatrix k m == fmap (*k) m
+       $ \k m -> scaleMatrix k m == fmap (*k) (m :: Matrix R)
   , QC.testProperty "(+) = elementwise (+)"
        $ \m1 -> forAll (genMatrix (nrows m1) (ncols m1))
        $ \m2 -> m1 + m2 == elementwise (+) m1 m2
