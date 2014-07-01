@@ -55,7 +55,9 @@ instance Arbitrary Sq where
 
 main :: IO ()
 main = defaultMain $ testGroup "matrix tests" [
-    QC.testProperty "identity * m = m * identity = m"
+    QC.testProperty "zero n m = matrix n m (const 0)"
+       $ \(I n) (I m) -> zero n m == matrix n m (const 0)
+  , QC.testProperty "identity * m = m * identity = m"
        $ \(Sq m) -> let n = nrows m in identity n * m == m && m * identity n == m
   , QC.testProperty "a * (b * c) = (a * b) * c"
        $ \(I a) (I b) (I c) (I d) -> forAll (genMatrix a b)
@@ -68,6 +70,8 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \m2 -> multStd m1 m2 == multStd2 m1 m2
   , QC.testProperty "getMatrixAsVector m = mconcat [ getRow i m | i <- [1 .. nrows m]]"
        $ \m -> getMatrixAsVector (m :: Matrix R) == mconcat [ getRow i m | i <- [1 .. nrows m] ]
+  , QC.testProperty "fmap id = id"
+       $ \m -> fmap id m == (m :: Matrix R)
   , QC.testProperty "permMatrix n i j * permMatrix n i j = identity n"
        $ \(I n) -> forAll (choose (1,n))
        $ \i     -> forAll (choose (1,n))
@@ -91,6 +95,8 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \m -> forAll (choose (1,nrows m))
        $ \i -> forAll (choose (1,ncols m))
        $ \j -> joinBlocks (splitBlocks i j m) == (m :: Matrix R)
+  , QC.testProperty "scaleMatrix k m = fmap (*k) m"
+       $ \k m -> scaleMatrix k m == fmap (*k) m
   , QC.testProperty "(+) = elementwise (+)"
        $ \m1 -> forAll (genMatrix (nrows m1) (ncols m1))
        $ \m2 -> m1 + m2 == elementwise (+) m1 m2

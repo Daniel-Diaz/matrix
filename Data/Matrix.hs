@@ -1026,7 +1026,7 @@ recLUDecomp u l p d k n =
        in  if i == k
               then l
               else M (nrows l) (ncols l) lro lco lw $
-                     V.modify (\mv -> forM_ [1 .. (k-1)] $ 
+                     V.modify (\mv -> forM_ [1 .. k-1] $ 
                                  \j -> MV.swap mv (en (i+lro,j+lco))
                                                   (en (k+lro,j+lco))
                                 ) $ mvect l
