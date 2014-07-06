@@ -80,4 +80,24 @@ main = sequence_
       ( minorMatrix 2 2 $ fromList 3 3 [1..9]
       , fromList 2 2 [1,3 , 7,9]
         )
+  , testEquality "scaleMatrix"
+      ( scaleMatrix 2 $ fromList 3 3 [1..9]
+      , fromList 3 3 [2,4,6 , 8,10,12 , 14,16,18]
+        )
+  , testEquality "scaleRow"
+      ( scaleRow 2 2 $ fromList 3 3 [1..9]
+      , fromList 3 3 [1,2,3 , 8,10,12 , 7,8,9]
+        )
+  , testEquality "combineRows"
+      ( combineRows 2 2 1 $ fromList 3 3 [1..9]
+      , fromList 3 3 [1,2,3 , 6,9,12 , 7,8,9]
+        )
+  , testEquality "switchRows"
+      ( switchRows 1 2 $ fromList 3 3 [1..9]
+      , fromList 3 3 [4,5,6 , 1,2,3 , 7,8,9]
+        )
+  , testEquality "switchCols"
+      ( switchCols 1 2 $ fromList 3 3 [1..9]
+      , fromList 3 3 [2,1,3 , 5,4,6 , 8,7,9]
+        )
     ]
