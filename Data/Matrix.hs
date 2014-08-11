@@ -10,13 +10,15 @@ module Data.Matrix (
   , forceMatrix
     -- * Builders
   , matrix
-  , fromList , fromLists
   , rowVector
   , colVector
     -- ** Special matrices
   , zero
   , identity
   , permMatrix
+    -- * List conversions
+  , fromList , fromLists
+  , toList   , toLists
     -- * Accessing
   , getElem , (!) , unsafeGet , safeGet
   , getRow  , getCol
@@ -259,6 +261,25 @@ fromList :: Int -- ^ Rows
          -> Matrix a
 {-# INLINE fromList #-}
 fromList n m = M n m 0 0 m . V.fromListN (n*m)
+
+-- | Get the elements of a matrix stored in a list.
+--
+-- >        ( 1 2 3 )
+-- >        ( 4 5 6 )
+-- > toList ( 7 8 9 ) = [1,2,3,4,5,6,7,8,9]
+--
+toList :: Matrix a -> [a]
+toList m = [ unsafeGet i j m | i <- [1 .. nrows m] , j <- [1 .. ncols m] ]
+
+-- | Get the elements of a matrix stored in a list of lists,
+--   where each list contains the elements of a single row.
+--
+-- >         ( 1 2 3 )   [ [1,2,3]
+-- >         ( 4 5 6 )   , [4,5,6]
+-- > toLists ( 7 8 9 ) = , [7,8,9] ]
+--
+toLists :: Matrix a -> [[a]]
+toLists m = [ [ unsafeGet i j m | j <- [1 .. ncols m] ] | i <- [1 .. nrows m] ]
 
 -- | Create a matrix from a non-empty list of non-empty lists.
 --   /Each list must have at least as many elements as the first list/.

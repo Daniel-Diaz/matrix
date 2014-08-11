@@ -100,4 +100,12 @@ main = sequence_
       ( switchCols 1 2 $ fromList 3 3 [1..9]
       , fromList 3 3 [2,1,3 , 5,4,6 , 8,7,9]
         )
+  , testEquality "toList"
+      ( toList $ fromList 3 3 [1..9]
+      , [1..9]
+        )
+  , testEquality "toLists"
+      ( toLists $ fromList 3 3 [1..9]
+      , [ [1,2,3] , [4,5,6] , [7,8,9] ]
+        )
     ]

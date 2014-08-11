@@ -121,4 +121,8 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \(Sq m) -> let n = nrows m in forAll (choose (1,n))
        $ \i      -> forAll (choose (1,n))
        $ \j      -> detLU (switchRows i j m) == detLU (permMatrix n i j) * detLU m
+  , QC.testProperty "fromList n m . toList = id"
+       $ \m -> fromList (nrows m) (ncols m) (toList m) == (m :: Matrix R)
+  , QC.testProperty "fromLists . toLists = id"
+       $ \m -> fromLists (toLists m) == (m :: Matrix R)
     ]
