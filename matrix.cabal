@@ -28,12 +28,6 @@ Source-repository head
   type: git
   location: git://github.com/Daniel-Diaz/matrix.git
 
-Flag dev
-  Description: Add flags aimed to developers. See cabal
-               file for details.
-  Default: False
-  Manual: True
-
 Library
   Build-depends: base == 4.*
                , vector >= 0.10 && < 0.11
@@ -42,11 +36,6 @@ Library
                , loop >= 0.2
   Exposed-modules: Data.Matrix
   GHC-Options: -Wall -O2 -fstatic-argument-transformation
-  if flag(dev)
-    GHC-Options: -ddump-to-file
-                 -ddump-asm -ddump-cmm -ddump-simpl
-                 -ddump-simpl-stats
-                 -fforce-recomp
 
 Benchmark matrix-mult
   type: exitcode-stdio-1.0
