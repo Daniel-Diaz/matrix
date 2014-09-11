@@ -162,11 +162,12 @@ instance Functor Matrix where
 mapRow :: (Int -> a -> a) -- ^ Function takes the current column as additional argument.
         -> Int            -- ^ Row to map.
         -> Matrix a -> Matrix a
-mapRow f r0 (M n m ro co w v) =
-  let r = r0 + ro
-  in  M n m ro co w $
-        V.imap (\k x -> let (i,j) = decode w k
-                        in  if i == r then f j x else x) v
+mapRow f r m =
+  matrix (nrows m) (ncols m) $ \(i,j) ->
+    let a = unsafeGet i j m
+    in  if i == r
+           then f j a
+           else a
 
 -- | /O(rows*cols)/. Map a function over a column.
 --   Example:
@@ -178,11 +179,12 @@ mapRow f r0 (M n m ro co w v) =
 mapCol :: (Int -> a -> a) -- ^ Function takes the current row as additional argument.
         -> Int            -- ^ Column to map.
         -> Matrix a -> Matrix a
-mapCol f c0 (M n m ro co w v) =
-  let c = c0 + co
-  in  M n m ro co w $
-        V.imap (\k x -> let (i,j) = decode w k
-                        in  if j == c then f i x else x) v
+mapCol f c m =
+  matrix (nrows m) (ncols m) $ \(i,j) ->
+    let a = unsafeGet i j m
+    in  if j == c
+           then f i a
+           else a
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -946,7 +948,7 @@ scaleMatrix = fmap . (*)
 scaleRow :: Num a => a -> Int -> Matrix a -> Matrix a
 scaleRow = mapRow . const . (*)
 
--- | Add to one row a scalar multiple of other row.
+-- | Add to one row a scalar multiple of another row.
 --   Example:
 --
 -- >                   ( 1 2 3 )   (  1  2  3 )
