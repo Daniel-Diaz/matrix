@@ -67,9 +67,9 @@ module Data.Matrix (
 
 -- Classes
 import Control.DeepSeq
-import Control.Monad    (forM_)
-import Control.Loop     (numLoop,numLoopFold)
-import Data.Foldable    (Foldable (..))
+import Control.Monad (forM_)
+import Control.Loop (numLoop,numLoopFold)
+import Data.Foldable (Foldable, foldMap)
 import Data.Monoid
 import Data.Traversable
 -- Data
@@ -511,8 +511,12 @@ submatrix :: Int    -- ^ Starting row
           -> Matrix a
           -> Matrix a
 {-# INLINE submatrix #-}
-submatrix r1 r2 c1 c2 (M _ _ ro co w v) =
-   M (r2-r1+1) (c2-c1+1) (ro+r1-1) (co+c1-1) w v
+submatrix r1 r2 c1 c2 (M n m ro co w v)
+  | r1 < 1  || r1 > n = error $ "submatrix: starting row (" ++ show r1 ++ ") is out of range. Matrix has " ++ show n ++ " rows."
+  | c1 < 1  || c1 > m = error $ "submatrix: starting column (" ++ show c1 ++ ") is out of range. Matrix has " ++ show m ++ " columns."
+  | r2 < r1 || r2 > n = error $ "submatrix: ending row (" ++ show r2 ++ ") is out of range. Matrix has " ++ show n ++ " rows, and starting row is " ++ show r1 ++ "."
+  | c2 < c1 || c2 > m = error $ "submatrix: ending column (" ++ show c2 ++ ") is out of range. Matrix has " ++ show m ++ " columns, and starting column is " ++ show c1 ++ "."
+  | otherwise = M (r2-r1+1) (c2-c1+1) (ro+r1-1) (co+c1-1) w v
 
 -- | /O(rows*cols)/. Remove a row and a column from a matrix.
 --   Example:
