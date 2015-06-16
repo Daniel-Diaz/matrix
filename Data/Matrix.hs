@@ -203,7 +203,7 @@ instance Traversable Matrix where
 -- | /O(rows*cols)/. The zero matrix of the given size.
 --
 -- > zero n m =
--- >                 n
+-- >                 m
 -- >   1 ( 0 0 ... 0 0 )
 -- >   2 ( 0 0 ... 0 0 )
 -- >     (     ...     )
