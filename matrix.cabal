@@ -1,5 +1,5 @@
 Name: matrix
-Version: 0.3.4.3
+Version: 0.3.4.4
 Author: Daniel Díaz
 Category: Math
 Build-type: Simple
@@ -30,7 +30,7 @@ Source-repository head
 
 Library
   Build-depends: base == 4.*
-               , vector >= 0.10 && < 0.11
+               , vector >= 0.10
                , deepseq >= 1.3.0.0 && < 1.5
                , primitive >= 0.5
                , loop >= 0.2
