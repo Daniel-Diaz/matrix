@@ -71,13 +71,14 @@ import Control.Monad (forM_)
 import Control.Loop (numLoop,numLoopFold)
 import Data.Foldable (Foldable, foldMap)
 import Data.Monoid
-import Data.Traversable
+import Data.Traversable()
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy,foldl1')
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
+import Data.Maybe
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -151,6 +152,47 @@ instance Functor Matrix where
 
 -------------------------------------------------------
 -------------------------------------------------------
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- MONOID INSTANCE
+
+instance Monoid a => Monoid (Matrix a) where
+  mempty = fromList 1 1 [mempty] 
+  mappend m m' = matrix (max (nrows m) (nrows m')) (max (ncols m) (ncols m')) $ uncurry zipTogether
+    where zipTogether row column
+            | (isJust melem && isJust m'elem) = (fromJust melem) <> (fromJust m'elem)
+            | (isJust melem) = (fromJust melem)
+            | (isJust m'elem) = fromJust m'elem
+            | otherwise = mempty
+                          where melem = safeGet row column m
+                                m'elem = safeGet row column m'
+
+
+-------------------------------------------------------
+-------------------------------------------------------
+-------------------------------------------------------
+-------------------------------------------------------
+
+-------------------------------------------------------
+-------------------------------------------------------
+---- APPLICATIVE INSTANCE
+---- Works like tensor product but applies a function 
+
+instance Applicative Matrix where
+  pure x = fromList 1 1 [x] 
+  m <*> m' = flatten $ ((\f -> f <$> m') <$> m)
+
+
+-------------------------------------------------------
+-------------------------------------------------------
+
+
+
+-- | Flatten a matrix of matrices. All sub matrices must have same dimensions
+--   This criteria is not checked. 
+flatten:: (Matrix (Matrix a)) -> Matrix a
+flatten m = foldl1 (<->) $ map (foldl1 (<|>)) $ map (\i -> getRow i m) [1..(nrows m)]
 
 -- | /O(rows*cols)/. Map a function over a row.
 --   Example:

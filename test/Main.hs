@@ -2,11 +2,12 @@
 import Data.Matrix
 import Data.Ratio
 import Control.Applicative
-import Data.Monoid (mconcat)
+import Data.Monoid
 
 import Test.Tasty
 import qualified Test.Tasty.QuickCheck as QC
 import Test.QuickCheck
+import Test.QuickCheck.Function
 import Test.Hspec
 
 {- matrix package test set
@@ -36,6 +37,9 @@ instance Arbitrary a => Arbitrary (Matrix a) where
     I n <- arbitrary
     I m <- arbitrary
     genMatrix' n m
+
+instance Arbitrary a => Arbitrary (Sum a) where
+  arbitrary = Sum <$> arbitrary
 
 genMatrix' :: Arbitrary a => Int -> Int -> Gen (Matrix a)
 genMatrix' n m = fromList n m <$> vector (n*m)
@@ -125,4 +129,21 @@ main = hspec $ parallel $ describe "matrix tests" $do
     it  "fromList n m . toList = id" $ property
        $ \m -> fromList (nrows m) (ncols m) (toList m) == (m :: Matrix R)
     it "fromLists . toLists = id" $ property 
-       $ \m -> fromLists (toLists m) == (m :: Matrix R)
+       $ \m -> fromLists (toLists m) == (m :: Matrix (Sum Int))
+    it "monoid law: mappend mempty x = x" $ property
+       $ \x -> mappend mempty (x :: Matrix (Sum Int)) == x
+    it "monoid law: mappend x mempty = x" $ property
+       $ \x -> mappend (x :: Matrix (Sum Int)) mempty == x
+    it "monoid law: mappend x (mappend y z) = mappend (mappend x y) z " $ property
+       $ \x y z -> mappend (x :: Matrix (Sum Int)) (mappend (y::Matrix (Sum Int)) (z::Matrix (Sum Int))) == mappend (mappend x y) z
+    it "applicative law - identity: pure id <*> v = v" $ property
+       $ \x -> (pure id <*> (x :: (Matrix Int))) == x
+    {-- I couldn't get this one towork
+    it "applicative law - composition: pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $ property
+       $ \u v w -> (pure (.) <*> (u :: Matrix (Int->Int)) <*> (v::Matrix(Int->Int)) <*> (w::Matrix(Int->Int))) == (u <*> (v <*> w))
+    it "applicative law - homomorphism: pure f <*> pure x = pure (f x)" $ property
+       $ \(Fun _ f) x -> (pure f <*> pure (x :: Int)) == pure (f x)
+    it "applicative law - interchange: u <*> pure y = pure ($ y) <*> u" $ property
+       $ \(Fun _ u) y -> (u <*> pure (y :: Int)) == (pure ($ y ) <*> u)
+    --}
+
