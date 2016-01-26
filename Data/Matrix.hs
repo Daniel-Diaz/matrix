@@ -160,13 +160,7 @@ instance Functor Matrix where
 instance Monoid a => Monoid (Matrix a) where
   mempty = fromList 1 1 [mempty] 
   mappend m m' = matrix (max (nrows m) (nrows m')) (max (ncols m) (ncols m')) $ uncurry zipTogether
-    where zipTogether row column
-            | (isJust melem && isJust m'elem) = (fromJust melem) <> (fromJust m'elem)
-            | (isJust melem) = (fromJust melem)
-            | (isJust m'elem) = fromJust m'elem
-            | otherwise = mempty
-                          where melem = safeGet row column m
-                                m'elem = safeGet row column m'
+    where zipTogether row column = fromMaybe mempty $ safeGet row column m <> safeGet row column m'
 
 
 -------------------------------------------------------
@@ -1275,4 +1269,3 @@ detLU :: (Ord a, Fractional a) => Matrix a -> a
 detLU m = case luDecomp m of
   Just (u,_,_,d) -> d * diagProd u
   Nothing -> 0
-
