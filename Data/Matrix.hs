@@ -63,6 +63,7 @@ module Data.Matrix (
     -- ** Determinants
   , detLaplace
   , detLU
+  , flatten
   ) where
 
 -- Classes
@@ -186,7 +187,7 @@ instance Applicative Matrix where
 -- | Flatten a matrix of matrices. All sub matrices must have same dimensions
 --   This criteria is not checked. 
 flatten:: (Matrix (Matrix a)) -> Matrix a
-flatten m = foldl1 (<->) $ map (foldl1 (<|>)) $ map (\i -> getRow i m) [1..(nrows m)]
+flatten m = foldl1 (<->) $ map (foldl1 (<|>) . (\i -> getRow i m)) [1..(nrows m)]
 
 -- | /O(rows*cols)/. Map a function over a row.
 --   Example:
