@@ -58,6 +58,9 @@ instance Arbitrary Sq where
     I n <- arbitrary
     Sq <$> genMatrix n n
 
+matrixPure:: a -> Matrix a --Only useful as a type constraint
+matrixPure = pure
+
 main :: IO ()
 main = hspec $ parallel $ describe "matrix tests" $do 
     it "zero n m = matrix n m (const 0)"$ property
@@ -138,12 +141,10 @@ main = hspec $ parallel $ describe "matrix tests" $do
        $ \x y z -> mappend (x :: Matrix (Sum Int)) (mappend (y::Matrix (Sum Int)) (z::Matrix (Sum Int))) == mappend (mappend x y) z
     it "applicative law - identity: pure id <*> v = v" $ property
        $ \x -> (pure id <*> (x :: (Matrix Int))) == x
-    {-- I couldn't get this one towork
     it "applicative law - composition: pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $ property
-       $ \u v w -> (pure (.) <*> (u :: Matrix (Int->Int)) <*> (v::Matrix(Int->Int)) <*> (w::Matrix(Int->Int))) == (u <*> (v <*> w))
+       $ \(Fun _ u) (Fun _ v) w -> (matrixPure (.) <*> matrixPure (u :: Int->Int) <*> matrixPure (v:: Int->Int) <*> matrixPure (w :: Int)) == (matrixPure u <*> (matrixPure v <*> matrixPure w))
     it "applicative law - homomorphism: pure f <*> pure x = pure (f x)" $ property
-       $ \(Fun _ f) x -> (pure f <*> pure (x :: Int)) == pure (f x)
+       $ \(Fun _ f) x -> (matrixPure (f :: Int -> Int) <*> pure (x :: Int)) == pure (f x)
     it "applicative law - interchange: u <*> pure y = pure ($ y) <*> u" $ property
-       $ \(Fun _ u) y -> (u <*> pure (y :: Int)) == (pure ($ y ) <*> u)
-    --}
+       $ \(Fun _ u) y -> ((matrixPure (u :: Int -> Int)) <*> pure (y :: Int)) == (pure ($ y ) <*> (pure u))
 
