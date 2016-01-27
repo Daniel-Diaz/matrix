@@ -1,4 +1,4 @@
-
+{-# LANGUAGE FlexibleInstances #-}
 import Data.Matrix
 import Data.Ratio
 import Control.Applicative
@@ -32,6 +32,11 @@ instance Show I where
 instance Arbitrary I where
   arbitrary = I <$> choose (1,9)
 
+instance CoArbitrary a => CoArbitrary (Matrix a) where
+  coarbitrary = coarbitrary . toList
+instance Show (Int -> Int) where
+  show _ = ""
+
 instance Arbitrary a => Arbitrary (Matrix a) where
   arbitrary = do
     I n <- arbitrary
@@ -57,9 +62,6 @@ instance Arbitrary Sq where
   arbitrary = do
     I n <- arbitrary
     Sq <$> genMatrix n n
-
-matrixPure:: a -> Matrix a --Only useful as a type constraint
-matrixPure = pure
 
 main :: IO ()
 main = hspec $ parallel $ describe "matrix tests" $do 
@@ -142,9 +144,8 @@ main = hspec $ parallel $ describe "matrix tests" $do
     it "applicative law - identity: pure id <*> v = v" $ property
        $ \x -> (pure id <*> (x :: (Matrix Int))) == x
     it "applicative law - composition: pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $ property
-       $ \(Fun _ u) (Fun _ v) w -> (matrixPure (.) <*> matrixPure (u :: Int->Int) <*> matrixPure (v:: Int->Int) <*> matrixPure (w :: Int)) == (matrixPure u <*> (matrixPure v <*> matrixPure w))
+       $ \u v w -> (pure (.) <*> (u :: Matrix (Int->Int)) <*> (v :: Matrix (Int->Int)) <*> (w :: Matrix Int)) == (u <*> (v <*> w))
     it "applicative law - homomorphism: pure f <*> pure x = pure (f x)" $ property
-       $ \(Fun _ f) x -> (matrixPure (f :: Int -> Int) <*> pure (x :: Int)) == pure (f x)
+       $ \f x -> ((pure (f :: Int -> Int) <*> pure (x :: Int))::Matrix Int) == pure (f x)
     it "applicative law - interchange: u <*> pure y = pure ($ y) <*> u" $ property
-       $ \(Fun _ u) y -> ((matrixPure (u :: Int -> Int)) <*> pure (y :: Int)) == (pure ($ y ) <*> (pure u))
-
+       $ \u y -> ((u :: Matrix (Int -> Int)) <*> pure (y :: Int)) == (pure ($ y ) <*> u)
