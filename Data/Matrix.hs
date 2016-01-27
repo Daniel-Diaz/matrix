@@ -20,7 +20,7 @@ module Data.Matrix (
   , fromList , fromLists
   , toList   , toLists
     -- * Accessing
-  , getElem , (!) , unsafeGet , safeGet
+  , getElem , (!) , unsafeGet , safeGet, safeSet
   , getRow  , getCol
   , getDiag
   , getMatrixAsVector
@@ -424,6 +424,12 @@ safeGet :: Int -> Int -> Matrix a -> Maybe a
 safeGet i j a@(M n m _ _ _ _)
  | i > n || j > m || i < 1 || j < 1 = Nothing
  | otherwise = Just $ unsafeGet i j a
+
+-- | Variant of 'setElem' that returns Maybe instead of an error.
+safeSet:: a -> (Int, Int) -> Matrix a -> Maybe (Matrix a)
+safeSet x p@(i,j) a@(M n m _ _ _ _)
+  | i > n || j > m || i < 1 || j < 1 = Nothing
+  | otherwise = Just $ unsafeSet x p a
 
 -- | /O(1)/. Get a row of a matrix as a vector.
 getRow :: Int -> Matrix a -> V.Vector a
