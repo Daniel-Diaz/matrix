@@ -28,6 +28,7 @@ module Data.Matrix (
   , setElem
   , unsafeSet
   , transpose , setSize , extendTo
+  , inverse, rref
   , mapRow , mapCol
     -- * Submatrices
     -- ** Splitting blocks
@@ -71,6 +72,7 @@ import Control.DeepSeq
 import Control.Monad (forM_)
 import Control.Loop (numLoop,numLoopFold)
 import Data.Foldable (Foldable, foldMap)
+import Data.Maybe
 import Data.Monoid
 import Data.Traversable()
 -- Data
@@ -503,6 +505,71 @@ unsafeSet x p (M n m ro co w v) = M n m ro co w $ V.modify (unsafeMset x w ro co
 -- > transpose ( 7 8 9 ) = ( 3 6 9 )
 transpose :: Matrix a -> Matrix a
 transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
+
+-- | /O(rows*rows*rows) = O(cols*cols*cols)/. The inverse of a square matrix.
+--   Uses naive Gaussian elimination formula.
+inverse :: (Fractional a, Eq a) => Matrix a -> Matrix a
+inverse m
+    | ncols m /= nrows m
+        = error
+            $ "Inverting non-square matrix with dimensions "
+                ++ show (sizeStr (ncols m) (nrows m))
+    | otherwise =
+        let
+            adjoinedWId = m <|> identity (nrows m)
+            rref'd = rref adjoinedWId
+        in submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2) rref'd
+
+-- | /O(rows*rows*cols)/. Converts a matrix to reduced row echelon form, thus
+--  solving a linear system of equations. This requires that (cols > rows)
+--  if cols < rows, then there are fewer variables than equations and the
+--  problem cannot be solved consistently. If rows = cols, then it is
+--  basically a homogenous system of equations, so it will be reduced to
+--  identity or an error depending on whether the marix is invertible
+--  (this case is allowed for robustness).
+rref :: (Fractional a, Eq a) => Matrix a -> Matrix a
+rref m
+        | ncols m < nrows m
+            = error $
+                "Invalid dimensions "
+                    ++ show (sizeStr (ncols m) (nrows m))
+                    ++ "; the number of columns must be greater than or equal to the number of rows"
+        | otherwise             = rrefRefd (ref m)
+    where
+    rrefRefd mtx
+        | nrows mtx == 1    = mtx
+        | otherwise =
+            let
+                resolvedRight = foldr (.) id (map resolveRow [1..col-1]) mtx
+                    where
+                    col = nrows mtx
+                    resolveRow n = combineRows n (-getElem n col mtx) col
+                top = submatrix 1 (nrows resolvedRight - 1) 1 (ncols resolvedRight) resolvedRight
+                top' = rrefRefd top
+                bot = submatrix (nrows resolvedRight) (nrows resolvedRight) 1 (ncols resolvedRight) resolvedRight
+            in top' <-> bot
+
+
+ref :: (Fractional a, Eq a) => Matrix a -> Matrix a
+ref mtx
+        | nrows mtx == 1
+            = clearedLeft
+        | otherwise =
+            let
+                (tl, tr, bl, br) = splitBlocks 1 1 clearedLeft
+                br' = ref br
+            in (tl <|> tr) <-> (bl <|> br')
+    where
+    sigAtTop = switchRows 1 goodRow mtx
+        where
+        significantRow n = getElem n 1 mtx /= 0
+        goodRow = case listToMaybe (filter significantRow [1..ncols mtx]) of
+            Nothing -> error "Attempt to invert a non-invertible matrix"
+            Just x -> x
+    normalizedFirstRow = scaleRow (1 / getElem 1 1 mtx) 1 sigAtTop
+    clearedLeft = foldr (.) id (map combinator [2..nrows mtx]) normalizedFirstRow
+        where
+        combinator n = combineRows n (-getElem n 1 normalizedFirstRow) 1
 
 -- | Extend a matrix to a given size adding a default element.
 --   If the matrix already has the required size, nothing happens.
