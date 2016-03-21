@@ -508,17 +508,17 @@ transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
 -- | /O(rows*rows*rows) = O(cols*cols*cols)/. The inverse of a square matrix.
 --   Uses naive Gaussian elimination formula.
-inverse :: (Fractional a, Eq a) => Matrix a -> Matrix a
+inverse :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 inverse m
     | ncols m /= nrows m
-        = error
+        = Left
             $ "Inverting non-square matrix with dimensions "
                 ++ show (sizeStr (ncols m) (nrows m))
     | otherwise =
         let
             adjoinedWId = m <|> identity (nrows m)
             rref'd = rref adjoinedWId
-        in submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2) rref'd
+        in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
 
 -- | /O(rows*rows*cols)/. Converts a matrix to reduced row echelon form, thus
 --  solving a linear system of equations. This requires that (cols > rows)
@@ -527,17 +527,17 @@ inverse m
 --  basically a homogenous system of equations, so it will be reduced to
 --  identity or an error depending on whether the marix is invertible
 --  (this case is allowed for robustness).
-rref :: (Fractional a, Eq a) => Matrix a -> Matrix a
+rref :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 rref m
         | ncols m < nrows m
-            = error $
+            = Left $
                 "Invalid dimensions "
                     ++ show (sizeStr (ncols m) (nrows m))
                     ++ "; the number of columns must be greater than or equal to the number of rows"
         | otherwise             = rrefRefd (ref m)
     where
     rrefRefd mtx
-        | nrows mtx == 1    = mtx
+        | nrows mtx == 1    = Right mtx
         | otherwise =
             let
                 resolvedRight = foldr (.) id (map resolveRow [1..col-1]) mtx
@@ -547,7 +547,7 @@ rref m
                 top = submatrix 1 (nrows resolvedRight - 1) 1 (ncols resolvedRight) resolvedRight
                 top' = rrefRefd top
                 bot = submatrix (nrows resolvedRight) (nrows resolvedRight) 1 (ncols resolvedRight) resolvedRight
-            in top' <-> bot
+            in top' >>= return . (<-> bot)
 
 
 ref :: (Fractional a, Eq a) => Matrix a -> Matrix a
