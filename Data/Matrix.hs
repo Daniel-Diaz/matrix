@@ -67,14 +67,16 @@ module Data.Matrix (
   , flatten
   ) where
 
+import Prelude hiding (foldl1)
 -- Classes
 import Control.DeepSeq
 import Control.Monad (forM_)
 import Control.Loop (numLoop,numLoopFold)
-import Data.Foldable (Foldable, foldMap)
+import Data.Foldable (Foldable, foldMap, foldl1)
 import Data.Maybe
 import Data.Monoid
-import Data.Traversable()
+import Data.Traversable
+import Control.Applicative(Applicative, (<$>), (<*>), pure)
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy,foldl1')
