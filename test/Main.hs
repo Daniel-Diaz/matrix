@@ -125,4 +125,10 @@ main = defaultMain $ testGroup "matrix tests" [
        $ \m -> fromList (nrows m) (ncols m) (toList m) == (m :: Matrix R)
   , QC.testProperty "fromLists . toLists = id"
        $ \m -> fromLists (toLists m) == (m :: Matrix R)
+  , QC.testProperty "inv m * m = Right identity"
+       $ \sq -> let m = fromSq sq in detLU m /= 0 ==> (multStd m <$> inverse m) == Right (identity (nrows m) :: Matrix R)
+  , QC.testProperty "inv . inv == id"
+       $ \sq -> let m = fromSq sq in detLU m /= 0 ==> (inverse m >>= inverse) == Right (m :: Matrix R)
+  , QC.testProperty "rref . fromSquare = const (identity)"
+       $ \sq -> let m = fromSq sq :: Matrix R in (detLU m /= 0) ==> rref m == Right (identity (ncols m))
     ]
