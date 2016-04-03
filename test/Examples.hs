@@ -51,6 +51,9 @@ main = sequence_
   , testEquality "identity"
       ( identity 3 , fromList 3 3 [1,0,0 , 0,1,0 , 0,0,1]
         )
+  , testEquality "diagonal"
+      ( diagonal 3 [1..] , fromList 3 3 [1,0,0 , 0,2,0 , 0,0,3]
+        )
   , testEquality "transpose"
       ( transpose $ fromList 3 3 [1..9]
       , fromList 3 3 [1,4,7 , 2,5,8 , 3,6,9]

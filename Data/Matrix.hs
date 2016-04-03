@@ -15,6 +15,7 @@ module Data.Matrix (
     -- ** Special matrices
   , zero
   , identity
+  , diagonal
   , permMatrix
     -- * List conversions
   , fromList , fromLists
@@ -289,6 +290,23 @@ matrix n m f = M n m 0 0 m $ V.create $ do
 --
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
+
+-- | Diagonal matrix from a non-empty list given the desired size.
+--   The list must have at least /order/ elements.
+--
+-- > diagonal n [1..] =
+-- >                   n
+-- >   1 ( 1 0 ... 0   0 )
+-- >   2 ( 0 2 ... 0   0 )
+-- >     (     ...       )
+-- >     ( 0 0 ... n-1 0 )
+-- >   n ( 0 0 ... 0   n )
+--
+diagonal :: Num a =>
+            Int  -- ^ Order
+         -> [a]  -- ^ List of elements
+         -> Matrix a
+diagonal n xs = matrix n n $ \(i,j) -> if i == j then xs !! (i - 1) else 0
 
 -- | Create a matrix from a non-empty list given the desired size.
 --   The list must have at least /rows*cols/ elements.
