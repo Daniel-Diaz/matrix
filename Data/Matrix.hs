@@ -15,6 +15,7 @@ module Data.Matrix (
     -- ** Special matrices
   , zero
   , identity
+  , diagonalList
   , diagonal
   , permMatrix
     -- * List conversions
@@ -291,10 +292,12 @@ matrix n m f = M n m 0 0 m $ V.create $ do
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
-diagonal :: Num a
-         => V.Vector a  -- ^ Diagonal vector
+-- | Similar to 'diagonalList', but using 'V.Vector', which
+--   should be more efficient.
+diagonal :: a -- ^ Default element
+         -> V.Vector a  -- ^ Diagonal vector
          -> Matrix a
-diagonal v = matrix n n $ \(i,j) -> if i == j then v V.! (i - 1) else 0
+diagonal e v = matrix n n $ \(i,j) -> if i == j then V.unsafeIndex v (i - 1) else e
   where
     n = V.length v
 
@@ -333,9 +336,10 @@ toLists :: Matrix a -> [[a]]
 toLists m = [ [ unsafeGet i j m | j <- [1 .. ncols m] ] | i <- [1 .. nrows m] ]
 
 -- | Diagonal matrix from a non-empty list given the desired size.
+--   Non-diagonal elements will be filled with the given default element.
 --   The list must have at least /order/ elements.
 --
--- > diagonal n [1..] =
+-- > diagonalList n 0 [1..] =
 -- >                   n
 -- >   1 ( 1 0 ... 0   0 )
 -- >   2 ( 0 2 ... 0   0 )
@@ -343,8 +347,8 @@ toLists m = [ [ unsafeGet i j m | j <- [1 .. ncols m] ] | i <- [1 .. nrows m] ]
 -- >     ( 0 0 ... n-1 0 )
 -- >   n ( 0 0 ... 0   n )
 --
-diagonalList :: Num a => Int -> [a] -> Matrix a
-diagonalList n xs = matrix n n $ \(i,j) -> if i == j then xs !! (i - 1) else 0
+diagonalList :: Int -> a -> [a] -> Matrix a
+diagonalList n e xs = matrix n n $ \(i,j) -> if i == j then xs !! (i - 1) else e
 
 -- | Create a matrix from a non-empty list of non-empty lists.
 --   /Each list must have at least as many elements as the first list/.
