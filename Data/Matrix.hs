@@ -291,22 +291,12 @@ matrix n m f = M n m 0 0 m $ V.create $ do
 identity :: Num a => Int -> Matrix a
 identity n = matrix n n $ \(i,j) -> if i == j then 1 else 0
 
--- | Diagonal matrix from a non-empty list given the desired size.
---   The list must have at least /order/ elements.
---
--- > diagonal n [1..] =
--- >                   n
--- >   1 ( 1 0 ... 0   0 )
--- >   2 ( 0 2 ... 0   0 )
--- >     (     ...       )
--- >     ( 0 0 ... n-1 0 )
--- >   n ( 0 0 ... 0   n )
---
-diagonal :: Num a =>
-            Int  -- ^ Order
-         -> [a]  -- ^ List of elements
+diagonal :: Num a
+         => V.Vector a  -- ^ Diagonal vector
          -> Matrix a
-diagonal n xs = matrix n n $ \(i,j) -> if i == j then xs !! (i - 1) else 0
+diagonal v = matrix n n $ \(i,j) -> if i == j then v V.! (i - 1) else 0
+  where
+    n = V.length v
 
 -- | Create a matrix from a non-empty list given the desired size.
 --   The list must have at least /rows*cols/ elements.
@@ -341,6 +331,20 @@ toList m = [ unsafeGet i j m | i <- [1 .. nrows m] , j <- [1 .. ncols m] ]
 --
 toLists :: Matrix a -> [[a]]
 toLists m = [ [ unsafeGet i j m | j <- [1 .. ncols m] ] | i <- [1 .. nrows m] ]
+
+-- | Diagonal matrix from a non-empty list given the desired size.
+--   The list must have at least /order/ elements.
+--
+-- > diagonal n [1..] =
+-- >                   n
+-- >   1 ( 1 0 ... 0   0 )
+-- >   2 ( 0 2 ... 0   0 )
+-- >     (     ...       )
+-- >     ( 0 0 ... n-1 0 )
+-- >   n ( 0 0 ... 0   n )
+--
+diagonalList :: Num a => Int -> [a] -> Matrix a
+diagonalList n xs = matrix n n $ \(i,j) -> if i == j then xs !! (i - 1) else 0
 
 -- | Create a matrix from a non-empty list of non-empty lists.
 --   /Each list must have at least as many elements as the first list/.
