@@ -129,14 +129,18 @@ sizeStr n m = show n ++ "x" ++ show m
 
 -- | Display a matrix as a 'String' using the 'Show' instance of its elements.
 prettyMatrix :: Show a => Matrix a -> String
-prettyMatrix m@(M _ _ _ _ _ v) = concat
-  [ "┌ ", unwords (replicate (ncols m) (fill mx "")), " ┐\n"
-  , unlines [ "│ " <> unwords (fmap (\j -> fill mx $ show $ m ! (i,j)) [1..ncols m]) <> " │" | i <- [1..nrows m] ]
-  , "└ ", unwords (replicate (ncols m) (fill mx "")), " ┘\n"
-  ]
+prettyMatrix m = concat
+   [ "┌ ", unwords (replicate (ncols m) blank), " ┐\n"
+   , unlines
+   [ "│ " ++ unwords (fmap (\j -> fill $ strings ! (i,j)) [1..ncols m]) ++ " │" | i <- [1..nrows m] ]
+   , "└ ", unwords (replicate (ncols m) blank), " ┘\n"
+   ]
  where
-  mx = V.maximum $ fmap (length . show) v
-  fill k str = replicate (k - length str) ' ' ++ str
+   strings@(M _ _ _ _ _ v)  = fmap show m
+   widest = V.maximum $ fmap length v
+   fill str = replicate (widest - length str) ' ' ++ str
+   blank = fill ""
+
 
 instance Show a => Show (Matrix a) where
  show = prettyMatrix
