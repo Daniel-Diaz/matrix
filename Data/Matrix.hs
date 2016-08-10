@@ -133,7 +133,7 @@ prettyMatrix m = concat
    [ "┌ ", unwords (replicate (ncols m) blank), " ┐\n"
    , unlines
    [ "│ " ++ unwords (fmap (\j -> fill $ strings ! (i,j)) [1..ncols m]) ++ " │" | i <- [1..nrows m] ]
-   , "└ ", unwords (replicate (ncols m) blank), " ┘\n"
+   , "└ ", unwords (replicate (ncols m) blank), " ┘"
    ]
  where
    strings@(M _ _ _ _ _ v)  = fmap show m
