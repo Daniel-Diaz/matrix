@@ -601,7 +601,7 @@ ref mtx
         goodRow = case listToMaybe (filter significantRow [1..ncols mtx]) of
             Nothing -> error "Attempt to invert a non-invertible matrix"
             Just x -> x
-    normalizedFirstRow = scaleRow (1 / getElem 1 1 mtx) 1 sigAtTop
+    normalizedFirstRow = scaleRow (1 / getElem 1 1 sigAtTop) 1 sigAtTop
     clearedLeft = foldr (.) id (map combinator [2..nrows mtx]) normalizedFirstRow
         where
         combinator n = combineRows n (-getElem n 1 normalizedFirstRow) 1
