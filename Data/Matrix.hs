@@ -543,12 +543,14 @@ transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
 -- | /O(rows*rows*rows) = O(cols*cols*cols)/. The inverse of a square matrix.
 --   Uses naive Gaussian elimination formula.
-inverse :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
+inverse :: (Fractional a, Ord a) => Matrix a -> Either String (Matrix a)
 inverse m
     | ncols m /= nrows m
         = Left
             $ "Inverting non-square matrix with dimensions "
                 ++ show (sizeStr (ncols m) (nrows m))
+    | detLU m == 0
+        = Left "Non-invertable matrix"
     | otherwise =
         let
             adjoinedWId = m <|> identity (nrows m)
