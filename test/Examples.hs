@@ -127,4 +127,10 @@ main = sequence_
             -17589/72415160, 3289/72415160, -51/72415160, -136422/1810379,
             617754/9051895, -125767/27155685, -802/27155685, 20050470/1810379,
             0, 0, 0, -1] :: Either String (Matrix Rational))
+  , testEquality "inverse (3)"
+      ( inverse $ fromList 2 2 [0,1, 1,0]
+      , Right $ fromList 2 2 [0,1, 1,0] :: Either String (Matrix Rational))
+  , testEquality "inverse (4)"
+      ( inverse $ fromList 3 3 [1,0,0, 0,0,1, 0,1,0]
+      , Right $ fromList 3 3 [1,0,0, 0,0,1, 0,1,0] :: Either String (Matrix Rational))
     ]
