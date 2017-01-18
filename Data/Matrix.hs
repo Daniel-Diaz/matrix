@@ -1,4 +1,4 @@
-
+{-# LANGUAGE DeriveGeneric #-}
 -- | Matrix datatype and operations.
 --
 --   Every provided example has been tested.
@@ -79,6 +79,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.Traversable
 import Control.Applicative(Applicative, (<$>), (<*>), pure)
+import GHC.Generics (Generic)
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy,foldl1')
@@ -114,7 +115,7 @@ data Matrix a = M {
  , colOffset :: {-# UNPACK #-} !Int
  , vcols     :: {-# UNPACK #-} !Int -- ^ Number of columns of the matrix without offset
  , mvect     :: V.Vector a          -- ^ Content of the matrix as a plain vector.
-   }
+   } deriving (Generic)
 
 instance Eq a => Eq (Matrix a) where
   m1 == m2 =
@@ -172,7 +173,7 @@ instance Functor Matrix where
 ---- MONOID INSTANCE
 
 instance Monoid a => Monoid (Matrix a) where
-  mempty = fromList 1 1 [mempty] 
+  mempty = fromList 1 1 [mempty]
   mappend m m' = matrix (max (nrows m) (nrows m')) (max (ncols m) (ncols m')) $ uncurry zipTogether
     where zipTogether row column = fromMaybe mempty $ safeGet row column m <> safeGet row column m'
 
@@ -185,10 +186,10 @@ instance Monoid a => Monoid (Matrix a) where
 -------------------------------------------------------
 -------------------------------------------------------
 ---- APPLICATIVE INSTANCE
----- Works like tensor product but applies a function 
+---- Works like tensor product but applies a function
 
 instance Applicative Matrix where
-  pure x = fromList 1 1 [x] 
+  pure x = fromList 1 1 [x]
   m <*> m' = flatten $ ((\f -> f <$> m') <$> m)
 
 
@@ -198,7 +199,7 @@ instance Applicative Matrix where
 
 
 -- | Flatten a matrix of matrices. All sub matrices must have same dimensions
---   This criteria is not checked. 
+--   This criteria is not checked.
 flatten:: (Matrix (Matrix a)) -> Matrix a
 flatten m = foldl1 (<->) $ map (foldl1 (<|>) . (\i -> getRow i m)) [1..(nrows m)]
 
@@ -872,7 +873,7 @@ multStd_ a@(M 2 2 _ _ _ _) b@(M 2 2 _ _ _ _) =
         -- B
         b11 = b !. (1,1) ; b12 = b !. (1,2)
         b21 = b !. (2,1) ; b22 = b !. (2,2)
-    in V.fromList 
+    in V.fromList
          [ a11*b11 + a12*b21 , a11*b12 + a12*b22
          , a21*b11 + a22*b21 , a21*b12 + a22*b22
            ]
@@ -1198,7 +1199,7 @@ recLUDecomp u l p d k n =
        in  if i == k
               then l
               else M (nrows l) (ncols l) lro lco lw $
-                     V.modify (\mv -> forM_ [1 .. k-1] $ 
+                     V.modify (\mv -> forM_ [1 .. k-1] $
                                  \j -> MV.swap mv (en (i+lro,j+lco))
                                                   (en (k+lro,j+lco))
                                 ) $ mvect l
