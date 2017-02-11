@@ -86,7 +86,6 @@ import           Data.List               (maximumBy,foldl1')
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
-import Data.Maybe
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -190,7 +189,7 @@ instance Monoid a => Monoid (Matrix a) where
 
 instance Applicative Matrix where
   pure x = fromList 1 1 [x]
-  m <*> m' = flatten $ ((\f -> f <$> m') <$> m)
+  m <*> m' = flatten $ (\f -> f <$> m') <$> m
 
 
 -------------------------------------------------------
@@ -200,7 +199,7 @@ instance Applicative Matrix where
 
 -- | Flatten a matrix of matrices. All sub matrices must have same dimensions
 --   This criteria is not checked.
-flatten:: (Matrix (Matrix a)) -> Matrix a
+flatten:: Matrix (Matrix a) -> Matrix a
 flatten m = foldl1 (<->) $ map (foldl1 (<|>) . (\i -> getRow i m)) [1..(nrows m)]
 
 -- | /O(rows*cols)/. Map a function over a row.
@@ -430,14 +429,15 @@ getElem :: Int      -- ^ Row
         -> a
 {-# INLINE getElem #-}
 getElem i j m =
-  case safeGet i j m of
-    Just x -> x
-    Nothing -> error
-      $ "getElem: Trying to get the "
-     ++ show (i,j)
-     ++ " element from a "
-     ++ sizeStr (nrows m) (ncols m)
-     ++ " matrix."
+  fromMaybe
+    (error $
+       "getElem: Trying to get the "
+        ++ show (i, j)
+        ++ " element from a "
+        ++ sizeStr (nrows m) (ncols m)
+        ++ " matrix."
+    )
+    (safeGet i j m)
 
 -- | /O(1)/. Unsafe variant of 'getElem', without bounds checking.
 unsafeGet :: Int      -- ^ Row
@@ -599,9 +599,10 @@ ref mtx
     sigAtTop = switchRows 1 goodRow mtx
         where
         significantRow n = getElem n 1 mtx /= 0
-        goodRow = case listToMaybe (filter significantRow [1..ncols mtx]) of
-            Nothing -> error "Attempt to invert a non-invertible matrix"
-            Just x -> x
+        goodRow = fromMaybe
+            (error "Attempt to invert a non-invertible matrix")
+            (listToMaybe (filter significantRow [1 .. ncols mtx]))
+
     normalizedFirstRow = scaleRow (1 / getElem 1 1 sigAtTop) 1 sigAtTop
     clearedLeft = foldr (.) id (map combinator [2..nrows mtx]) normalizedFirstRow
         where
