@@ -240,9 +240,9 @@ mapCol f c m =
 -- | /O(rows*cols)/. Map a function over elements.
 --   Example:
 --
--- >                          ( 1 2 3 )   ( 1 3 3 )
--- >                          ( 4 5 6 )   ( 4 6 6 )
--- > mapCol (\_ x -> x + 1) 2 ( 7 8 9 ) = ( 7 9 9 )
+-- >                            ( 1 2 3 )   ( 0 -1 -2 )
+-- >                            ( 4 5 6 )   ( 1  0 -1 )
+-- > mapPos (\(r,c) a -> r - c) ( 7 8 9 ) = ( 2  1  0 )
 --
 mapPos :: ((Int, Int) -> a -> b) -- ^ Function takes the current Position as additional argument.
         -> Matrix a
