@@ -247,12 +247,8 @@ mapCol f c m =
 mapPos :: ((Int, Int) -> a -> b) -- ^ Function takes the current Position as additional argument.
         -> Matrix a
         -> Matrix b
-mapPos f m =
-  let (M rows cols _ _ _ vect) = m
-      indices = V.fromList [(r,c) | c <- [1..cols], r <- [1..rows]]
-      resVect = V.zipWith f indices vect
-  in
-  m { mvect = resVect}
+mapPos f m@(M {ncols = cols, mvect = vect})=
+  m { mvect = V.imap (\i e -> f (decode cols i) e) vect}
 
 -------------------------------------------------------
 -------------------------------------------------------

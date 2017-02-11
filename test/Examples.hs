@@ -76,6 +76,10 @@ main = sequence_
       ( mapCol (\_ x -> x + 1) 2 $ fromList 3 3 [1..9]
       , fromList 3 3 [1,3,3 , 4,6,6 , 7,9,9]
         )
+  , testEquality "mapPos"
+      ( mapPos (\(r,c) x -> r + 2 * c) $ fromList 2 2 [1..4]
+      , fromList 2 2 [3, 5, 4, 6]
+      )
   , testEquality "submatrix"
       ( submatrix 1 2 2 3 $ fromList 3 3 [1..9]
       , fromList 2 2 [2,3 , 5,6]
