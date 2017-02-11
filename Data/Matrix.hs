@@ -31,7 +31,7 @@ module Data.Matrix (
   , unsafeSet
   , transpose , setSize , extendTo
   , inverse, rref
-  , mapRow , mapCol
+  , mapRow , mapCol, mapPos
     -- * Submatrices
     -- ** Splitting blocks
   , submatrix
@@ -235,6 +235,24 @@ mapCol f c m =
     in  if j == c
            then f i a
            else a
+
+
+-- | /O(rows*cols)/. Map a function over elements.
+--   Example:
+--
+-- >                          ( 1 2 3 )   ( 1 3 3 )
+-- >                          ( 4 5 6 )   ( 4 6 6 )
+-- > mapCol (\_ x -> x + 1) 2 ( 7 8 9 ) = ( 7 9 9 )
+--
+mapPos :: ((Int, Int) -> a -> b) -- ^ Function takes the current Position as additional argument.
+        -> Matrix a
+        -> Matrix b
+mapPos f m =
+  let (M rows cols _ _ _ vect) = m
+      indices = V.fromList [(r,c) | c <- [1..cols], r <- [1..rows]]
+      resVect = V.zipWith f indices vect
+  in
+  m { mvect = resVect}
 
 -------------------------------------------------------
 -------------------------------------------------------
