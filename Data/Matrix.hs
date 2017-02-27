@@ -23,7 +23,7 @@ module Data.Matrix (
   , toList   , toLists
     -- * Accessing
   , getElem , (!) , unsafeGet , safeGet, safeSet
-  , getRow  , getCol
+  , getRow  , safeGetRow , getCol , safeGetCol
   , getDiag
   , getMatrixAsVector
     -- * Manipulating matrices
@@ -474,10 +474,22 @@ getRow :: Int -> Matrix a -> V.Vector a
 {-# INLINE getRow #-}
 getRow i (M _ m ro co w v) = V.slice (w*(i-1+ro) + co) m v
 
+-- | Varian of 'getRow' that returns a maybe instead of an error
+safeGetRow :: Int -> Matrix a -> Maybe (V.Vector a)
+safeGetRow r m
+    | r > nrows m || r < 1 = Nothing
+    | otherwise = Just $ getRow r m
+
 -- | /O(rows)/. Get a column of a matrix as a vector.
 getCol :: Int -> Matrix a -> V.Vector a
 {-# INLINE getCol #-}
 getCol j (M n _ ro co w v) = V.generate n $ \i -> v V.! encode w (i+1+ro,j+co)
+
+-- | Varian of 'getColumn' that returns a maybe instead of an error
+safeGetCol :: Int -> Matrix a -> Maybe (V.Vector a)
+safeGetCol c m
+    | c > ncols m || c < 1 = Nothing
+    | otherwise = Just $ getCol c m
 
 -- | /O(min rows cols)/. Diagonal of a /not necessarily square/ matrix.
 getDiag :: Matrix a -> V.Vector a
