@@ -144,7 +144,13 @@ prettyMatrix m = concat
 
 
 instance Show a => Show (Matrix a) where
- show = prettyMatrix
+ show = show . toLists
+
+instance Read a => Read (Matrix a) where
+ readsPrec _ str = map toMatrix parsedLists
+   where
+     parsedLists = reads str
+     toMatrix (lists, str) = (fromLists lists, str)
 
 instance NFData a => NFData (Matrix a) where
  rnf = rnf . mvect
