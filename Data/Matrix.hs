@@ -30,7 +30,7 @@ module Data.Matrix (
   , setElem
   , unsafeSet
   , transpose , setSize , extendTo
-  , inverse, rref
+  , inverse, blockInverse, rref
   , mapRow , mapCol
     -- * Submatrices
     -- ** Splitting blocks
@@ -555,6 +555,31 @@ inverse m
             adjoinedWId = m <|> identity (nrows m)
             rref'd = rref adjoinedWId
         in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
+
+-- | /O(strassenMixed)/. The inverse of a square matrix.
+--   Inverts blockwise. Significantly faster than naive Gaussian elimination.
+--   Same time complexity as whatever matrix multiplication (*) currently uses.
+--   See https://en.wikipedia.org/wiki/Invertible_matrix#Blockwise_inversion
+blockInverse :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
+blockInverse m
+    | nrows m /= ncols m = inverse m
+    | otherwise = Right $ blockInverseUnsafe m
+
+-- blockInverse that assumes that it is called
+-- on a square matrix.
+blockInverseUnsafe :: (Fractional a, Eq a) => Matrix a -> Matrix a
+blockInverseUnsafe m
+    | nrows m < 10 = either (\_ -> m) id $ inverse m
+    | otherwise = joinBlocks (tl, tr, bl, br)
+    where size = nrows m
+          splitAt = size `div` 2
+          (a, b, c, d) = splitBlocks splitAt splitAt m
+          a' = blockInverseUnsafe a
+          dcab' = blockInverseUnsafe (d-c*a'*b)
+          tl = a' + a'*b*dcab'*c*a'
+          tr = -a'*b*dcab'
+          bl = -dcab'*c*a'
+          br = dcab'
 
 -- | /O(rows*rows*cols)/. Converts a matrix to reduced row echelon form, thus
 --  solving a linear system of equations. This requires that (cols > rows)
