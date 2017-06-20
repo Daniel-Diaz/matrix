@@ -542,7 +542,7 @@ unsafeSet x p (M n m ro co w v) = M n m ro co w $ V.modify (unsafeMset x w ro co
 transpose :: Matrix a -> Matrix a
 transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
--- | /O(rows*rows*rows) = O(cols*cols*cols)/. The inverse of a square matrix.
+-- | /O(rows*rows*rows*rows) = O(cols*cols*cols*cols)/. The inverse of a square matrix.
 --   Uses naive Gaussian elimination formula.
 inverse :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 inverse m
@@ -556,7 +556,7 @@ inverse m
             rref'd = rref adjoinedWId
         in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
 
--- | /O(rows*rows*cols)/. Converts a matrix to reduced row echelon form, thus
+-- | /O(rows*rows*cols*cols)/. Converts a matrix to reduced row echelon form, thus
 --  solving a linear system of equations. This requires that (cols > rows)
 --  if cols < rows, then there are fewer variables than equations and the
 --  problem cannot be solved consistently. If rows = cols, then it is
@@ -576,6 +576,7 @@ rref m
         | nrows mtx == 1    = Right mtx
         | otherwise =
             let
+                -- this is super-slow: [resolvedRight] is cubic because [combineRows] is quadratic
                 resolvedRight = foldr (.) id (map resolveRow [1..col-1]) mtx
                     where
                     col = nrows mtx
