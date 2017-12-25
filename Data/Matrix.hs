@@ -77,6 +77,7 @@ import Control.Loop (numLoop,numLoopFold)
 import Data.Foldable (Foldable, foldMap, foldl1)
 import Data.Maybe
 import Data.Monoid
+import qualified Data.Semigroup as S
 import Data.Traversable
 import Control.Applicative(Applicative, (<$>), (<*>), pure)
 import GHC.Generics (Generic)
@@ -170,6 +171,9 @@ instance Functor Matrix where
 -------------------------------------------------------
 -------------------------------------------------------
 ---- MONOID INSTANCE
+
+instance Monoid a => S.Semigroup (Matrix a) where
+  (<>) = mappend
 
 instance Monoid a => Monoid (Matrix a) where
   mempty = fromList 1 1 [mempty]
