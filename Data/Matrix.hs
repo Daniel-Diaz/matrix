@@ -1,4 +1,4 @@
-
+{-# LANGUAGE DeriveGeneric #-}
 -- | Matrix datatype and operations.
 --
 --   Every provided example has been tested.
@@ -23,7 +23,7 @@ module Data.Matrix (
   , toList   , toLists
     -- * Accessing
   , getElem , (!) , unsafeGet , safeGet, safeSet
-  , getRow  , getCol
+  , getRow  , safeGetRow , getCol , safeGetCol
   , getDiag
   , getMatrixAsVector
     -- * Manipulating matrices
@@ -31,7 +31,7 @@ module Data.Matrix (
   , unsafeSet
   , transpose , setSize , extendTo
   , inverse, rref
-  , mapRow , mapCol
+  , mapRow , mapCol, mapPos
     -- * Submatrices
     -- ** Splitting blocks
   , submatrix
@@ -77,15 +77,16 @@ import Control.Loop (numLoop,numLoopFold)
 import Data.Foldable (Foldable, foldMap, foldl1)
 import Data.Maybe
 import Data.Monoid
+import qualified Data.Semigroup as S
 import Data.Traversable
 import Control.Applicative(Applicative, (<$>), (<*>), pure)
+import GHC.Generics (Generic)
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy,foldl1')
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
-import Data.Maybe
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -114,7 +115,7 @@ data Matrix a = M {
  , colOffset :: {-# UNPACK #-} !Int
  , vcols     :: {-# UNPACK #-} !Int -- ^ Number of columns of the matrix without offset
  , mvect     :: V.Vector a          -- ^ Content of the matrix as a plain vector.
-   }
+   } deriving (Generic)
 
 instance Eq a => Eq (Matrix a) where
   m1 == m2 =
@@ -171,8 +172,11 @@ instance Functor Matrix where
 -------------------------------------------------------
 ---- MONOID INSTANCE
 
+instance Monoid a => S.Semigroup (Matrix a) where
+  (<>) = mappend
+
 instance Monoid a => Monoid (Matrix a) where
-  mempty = fromList 1 1 [mempty] 
+  mempty = fromList 1 1 [mempty]
   mappend m m' = matrix (max (nrows m) (nrows m')) (max (ncols m) (ncols m')) $ uncurry zipTogether
     where zipTogether row column = fromMaybe mempty $ safeGet row column m <> safeGet row column m'
 
@@ -185,11 +189,11 @@ instance Monoid a => Monoid (Matrix a) where
 -------------------------------------------------------
 -------------------------------------------------------
 ---- APPLICATIVE INSTANCE
----- Works like tensor product but applies a function 
+---- Works like tensor product but applies a function
 
 instance Applicative Matrix where
-  pure x = fromList 1 1 [x] 
-  m <*> m' = flatten $ ((\f -> f <$> m') <$> m)
+  pure x = fromList 1 1 [x]
+  m <*> m' = flatten $ (\f -> f <$> m') <$> m
 
 
 -------------------------------------------------------
@@ -198,8 +202,8 @@ instance Applicative Matrix where
 
 
 -- | Flatten a matrix of matrices. All sub matrices must have same dimensions
---   This criteria is not checked. 
-flatten:: (Matrix (Matrix a)) -> Matrix a
+--   This criteria is not checked.
+flatten:: Matrix (Matrix a) -> Matrix a
 flatten m = foldl1 (<->) $ map (foldl1 (<|>) . (\i -> getRow i m)) [1..(nrows m)]
 
 -- | /O(rows*cols)/. Map a function over a row.
@@ -235,6 +239,20 @@ mapCol f c m =
     in  if j == c
            then f i a
            else a
+
+
+-- | /O(rows*cols)/. Map a function over elements.
+--   Example:
+--
+-- >                            ( 1 2 3 )   ( 0 -1 -2 )
+-- >                            ( 4 5 6 )   ( 1  0 -1 )
+-- > mapPos (\(r,c) a -> r - c) ( 7 8 9 ) = ( 2  1  0 )
+--
+mapPos :: ((Int, Int) -> a -> b) -- ^ Function takes the current Position as additional argument.
+        -> Matrix a
+        -> Matrix b
+mapPos f m@(M {ncols = cols, mvect = vect})=
+  m { mvect = V.imap (\i e -> f (decode cols i) e) vect}
 
 -------------------------------------------------------
 -------------------------------------------------------
@@ -429,14 +447,15 @@ getElem :: Int      -- ^ Row
         -> a
 {-# INLINE getElem #-}
 getElem i j m =
-  case safeGet i j m of
-    Just x -> x
-    Nothing -> error
-      $ "getElem: Trying to get the "
-     ++ show (i,j)
-     ++ " element from a "
-     ++ sizeStr (nrows m) (ncols m)
-     ++ " matrix."
+  fromMaybe
+    (error $
+       "getElem: Trying to get the "
+        ++ show (i, j)
+        ++ " element from a "
+        ++ sizeStr (nrows m) (ncols m)
+        ++ " matrix."
+    )
+    (safeGet i j m)
 
 -- | /O(1)/. Unsafe variant of 'getElem', without bounds checking.
 unsafeGet :: Int      -- ^ Row
@@ -473,10 +492,22 @@ getRow :: Int -> Matrix a -> V.Vector a
 {-# INLINE getRow #-}
 getRow i (M _ m ro co w v) = V.slice (w*(i-1+ro) + co) m v
 
+-- | Varian of 'getRow' that returns a maybe instead of an error
+safeGetRow :: Int -> Matrix a -> Maybe (V.Vector a)
+safeGetRow r m
+    | r > nrows m || r < 1 = Nothing
+    | otherwise = Just $ getRow r m
+
 -- | /O(rows)/. Get a column of a matrix as a vector.
 getCol :: Int -> Matrix a -> V.Vector a
 {-# INLINE getCol #-}
 getCol j (M n _ ro co w v) = V.generate n $ \i -> v V.! encode w (i+1+ro,j+co)
+
+-- | Varian of 'getColumn' that returns a maybe instead of an error
+safeGetCol :: Int -> Matrix a -> Maybe (V.Vector a)
+safeGetCol c m
+    | c > ncols m || c < 1 = Nothing
+    | otherwise = Just $ getCol c m
 
 -- | /O(min rows cols)/. Diagonal of a /not necessarily square/ matrix.
 getDiag :: Matrix a -> V.Vector a
@@ -541,7 +572,7 @@ unsafeSet x p (M n m ro co w v) = M n m ro co w $ V.modify (unsafeMset x w ro co
 transpose :: Matrix a -> Matrix a
 transpose m = matrix (ncols m) (nrows m) $ \(i,j) -> m ! (j,i)
 
--- | /O(rows*rows*rows) = O(cols*cols*cols)/. The inverse of a square matrix.
+-- | /O(rows*rows*rows*rows) = O(cols*cols*cols*cols)/. The inverse of a square matrix.
 --   Uses naive Gaussian elimination formula.
 inverse :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 inverse m
@@ -555,7 +586,7 @@ inverse m
             rref'd = rref adjoinedWId
         in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
 
--- | /O(rows*rows*cols)/. Converts a matrix to reduced row echelon form, thus
+-- | /O(rows*rows*cols*cols)/. Converts a matrix to reduced row echelon form, thus
 --  solving a linear system of equations. This requires that (cols > rows)
 --  if cols < rows, then there are fewer variables than equations and the
 --  problem cannot be solved consistently. If rows = cols, then it is
@@ -575,6 +606,7 @@ rref m
         | nrows mtx == 1    = Right mtx
         | otherwise =
             let
+                -- this is super-slow: [resolvedRight] is cubic because [combineRows] is quadratic
                 resolvedRight = foldr (.) id (map resolveRow [1..col-1]) mtx
                     where
                     col = nrows mtx
@@ -874,7 +906,7 @@ multStd_ a@(M 2 2 _ _ _ _) b@(M 2 2 _ _ _ _) =
         -- B
         b11 = b !. (1,1) ; b12 = b !. (1,2)
         b21 = b !. (2,1) ; b22 = b !. (2,2)
-    in V.fromList 
+    in V.fromList
          [ a11*b11 + a12*b21 , a11*b12 + a12*b22
          , a21*b11 + a22*b21 , a21*b12 + a22*b22
            ]
@@ -1200,7 +1232,7 @@ recLUDecomp u l p d k n =
        in  if i == k
               then l
               else M (nrows l) (ncols l) lro lco lw $
-                     V.modify (\mv -> forM_ [1 .. k-1] $ 
+                     V.modify (\mv -> forM_ [1 .. k-1] $
                                  \j -> MV.swap mv (en (i+lro,j+lco))
                                                   (en (k+lro,j+lco))
                                 ) $ mvect l
