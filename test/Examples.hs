@@ -139,5 +139,5 @@ main = sequence_
       ( inverse $ fromList 3 3 [1,0,0, 0,0,1, 0,1,0]
       , Right $ fromList 3 3 [1,0,0, 0,0,1, 0,1,0] :: Either String (Matrix Rational))
   , testExample "inverse (6)" $ isLeft $ inverse $ fromList 2 2 [1,1,2,2]
-    , testEquality "inverse (7)" $ (inverse $fromList 3 3 [0,0,0,0,0,0,0,0,0::Double], Left "Attempt to invert a non-invertible matrix"t )
+  , testEquality "inverse (7)" ( inverse $ fromList 3 3 [0,0,0, 0,0,0, 0,0,0 :: Double], Left "Attempt to invert a non-invertible matrix")
     ]
