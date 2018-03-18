@@ -600,7 +600,7 @@ rref m
                 "Invalid dimensions "
                     ++ show (sizeStr (ncols m) (nrows m))
                     ++ "; the number of columns must be greater than or equal to the number of rows"
-        | otherwise             = rrefRefd (ref m)
+        | otherwise             = rrefRefd =<< (ref m)
     where
     rrefRefd mtx
         | nrows mtx == 1    = Right mtx
@@ -617,27 +617,28 @@ rref m
             in top' >>= return . (<-> bot)
 
 
-ref :: (Fractional a, Eq a) => Matrix a -> Matrix a
+ref :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 ref mtx
         | nrows mtx == 1
             = clearedLeft
-        | otherwise =
-            let
-                (tl, tr, bl, br) = splitBlocks 1 1 clearedLeft
-                br' = ref br
-            in (tl <|> tr) <-> (bl <|> br')
+        | otherwise = do 
+                (tl, tr, bl, br) <- (splitBlocks 1 1 <$> clearedLeft)
+                br' <- ref br
+                return  ((tl <|> tr) <-> (bl <|> br'))
     where
-    sigAtTop = switchRows 1 goodRow mtx
+    sigAtTop = (\row -> switchRows 1 row mtx) <$> goodRow
         where
         significantRow n = getElem n 1 mtx /= 0
-        goodRow = fromMaybe
-            (error "Attempt to invert a non-invertible matrix")
-            (listToMaybe (filter significantRow [1 .. ncols mtx]))
-
-    normalizedFirstRow = scaleRow (1 / getElem 1 1 sigAtTop) 1 sigAtTop
-    clearedLeft = foldr (.) id (map combinator [2..nrows mtx]) normalizedFirstRow
+        goodRow = case listToMaybe (filter significantRow [1..nrows mtx]) of
+            Nothing -> Left "Attempt to invert a non-invertible matrix"
+            Just x -> return x
+    normalizedFirstRow = (\sigAtTop' -> scaleRow (1 / getElem 1 1 sigAtTop') 1 sigAtTop') <$> sigAtTop
+    clearedLeft =  do 
+            comb <- mapM combinator [2..nrows mtx]
+            firstRow <- normalizedFirstRow
+            return $ (foldr (.) id comb) firstRow
         where
-        combinator n = combineRows n (-getElem n 1 normalizedFirstRow) 1
+        combinator n = (\normalizedFirstRow'  ->combineRows n (-getElem n 1 normalizedFirstRow') 1) <$> normalizedFirstRow
 
 -- | Extend a matrix to a given size adding a default element.
 --   If the matrix already has the required size, nothing happens.
