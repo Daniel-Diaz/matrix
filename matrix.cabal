@@ -36,6 +36,7 @@ Library
                , semigroups >= 0.9
                , loop >= 0.2
   Exposed-modules: Data.Matrix
+                 , Data.Matrix.Unboxed
   GHC-Options: -Wall -O2 -fstatic-argument-transformation
 
 Benchmark matrix-mult
