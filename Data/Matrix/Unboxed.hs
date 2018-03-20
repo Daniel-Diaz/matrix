@@ -1,6 +1,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- | A Matrix where the underlying container is an Unboxed Vector.
+{- | A 'Matrix' where the underlying container is an Unboxed Vector, leading to
+faster computations, due to a higher cache hit ratio, compared to the Matrix of Data.Matrix.
+
+Our benchmarks show a performance boost of 2x for small matrices (size ~ 10) and
+8x for larger matrices (size ~ 200).
+
+Note that you can use it only if your data type has an 'Unbox' instance. If not,
+you should use 'Data.Matrix' instead.
+-}
 module Data.Matrix.Unboxed (
     -- * Matrix type
     Matrix , prettyMatrix
@@ -865,9 +873,9 @@ Four methods are provided for matrix multiplication.
 
 * 'multStrassen':
      Matrix multiplication following the Strassen's algorithm.
-     Complexity grows slower but also some work is added
+     Complexity grows slower but memory requirement is @O(n^2)@, and some work is added
      partitioning the matrix. Also, it only works on square
-     matrices of order @2^n@, so if this condition is not
+     matrices of order @2^k@, so if this condition is not
      met, it is zero-padded until this is accomplished.
      Therefore, its use is not recommended.
 
@@ -1118,7 +1126,7 @@ instance (Num a, V.Unbox a) => Num (Matrix a) where
 
  -- Multiplication of matrices.
  {-# INLINE (*) #-}
- (*) = multStrassen
+ (*) = multStrassenMixed
 
 -------------------------------------------------------
 -------------------------------------------------------

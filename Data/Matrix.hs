@@ -857,9 +857,9 @@ Four methods are provided for matrix multiplication.
 
 * 'multStrassen':
      Matrix multiplication following the Strassen's algorithm.
-     Complexity grows slower but also some work is added
+     Complexity grows slower but memory requirement is @O(n^2)@, and some work is added
      partitioning the matrix. Also, it only works on square
-     matrices of order @2^n@, so if this condition is not
+     matrices of order @2^k@, so if this condition is not
      met, it is zero-padded until this is accomplished.
      Therefore, its use is not recommended.
 
