@@ -746,6 +746,8 @@ splitBlocks i j a@(M n m _ _ _ _) =
 -- >   (tl <|> tr)
 -- >       <->
 -- >   (bl <|> br)
+{-# SPECIALIZE joinBlocks :: (Matrix Double, Matrix Double, Matrix Double, Matrix Double) -> Matrix Double #-}
+{-# SPECIALIZE joinBlocks :: (Matrix Int, Matrix Int, Matrix Int, Matrix Int) -> Matrix Int #-}
 joinBlocks :: V.Unbox a
            => (Matrix a,Matrix a,Matrix a,Matrix a) -> Matrix a
 {-# INLINE[1] joinBlocks #-}
@@ -770,7 +772,7 @@ joinBlocks (tl,tr,bl,br) =
         return v
 
 {-# RULES
-"matrix/splitAndJoin"
+"matrixU/splitAndJoin"
    forall i j m. joinBlocks (splitBlocks i j m) = m
   #-}
 
@@ -780,6 +782,8 @@ joinBlocks (tl,tr,bl,br) =
 --
 -- Where both matrices /A/ and /B/ have the same number of rows.
 -- /This condition is not checked/.
+{-# SPECIALIZE (<|>) :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE (<|>) :: Matrix Int -> Matrix Int -> Matrix Int #-}
 (<|>) :: V.Unbox a
       => Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<|>) #-}
@@ -796,6 +800,8 @@ m <|> m' =
 --
 -- Where both matrices /A/ and /B/ have the same number of columns.
 -- /This condition is not checked/.
+{-# SPECIALIZE (<->) :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE (<->) :: Matrix Int -> Matrix Int -> Matrix Int #-}
 (<->) :: V.Unbox a
       => Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<->) #-}
@@ -870,6 +876,7 @@ If you want to be on the safe side, use ('*').
 -}
 
 -- | Standard matrix multiplication by definition.
+-- Note that Specializing this function for Int will make it slower!
 multStd :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
 {-# INLINE multStd #-}
 multStd a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
@@ -925,6 +932,8 @@ first f = go
   go _ = error "first: no element match the condition."
 
 -- | Strassen's algorithm over square matrices of order @2^n@.
+{-# SPECIALIZE strassen :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE strassen :: Matrix Int -> Matrix Int -> Matrix Int #-}
 strassen :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
 -- Trivial 1x1 multiplication.
 strassen a@(M 1 1 _ _ _ _) b@(M 1 1 _ _ _ _) = M 1 1 0 0 1 $ V.singleton $ (a ! (1,1)) * (b ! (1,1))
@@ -952,6 +961,8 @@ strassen a b = joinBlocks (c11,c12,c21,c22)
   c22 = p1 - p2 + p3 + p6
 
 -- | Strassen's matrix multiplication.
+{-# SPECIALIZE multStrassen :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE multStrassen :: Matrix Int -> Matrix Int -> Matrix Int #-}
 multStrassen :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
 multStrassen a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
@@ -1240,6 +1251,14 @@ cholDecomp a
 -------------------------------------------------------
 ---- PROPERTIES
 
+{-# RULES
+"matrixU/traceOfSum"
+    forall a b. trace (a + b) = trace a + trace b
+
+"matrixU/traceOfScale"
+    forall k a. trace (scaleMatrix k a) = k * trace a
+  #-}
+
 -- | Sum of the elements in the diagonal. See also 'getDiag'.
 --   Example:
 --
@@ -1259,6 +1278,14 @@ diagProd :: (Num a, V.Unbox a) => Matrix a -> a
 diagProd = V.product . getDiag
 
 -- DETERMINANT
+
+{-# RULES
+"matrixU/detLaplaceProduct"
+    forall a b. detLaplace (a*b) = detLaplace a * detLaplace b
+
+"matrixU/detLUProduct"
+    forall a b. detLU (a*b) = detLU a * detLU b
+  #-}
 
 -- | Matrix determinant using Laplace expansion.
 --   If the elements of the 'Matrix' are instance of 'Ord' and 'Fractional'

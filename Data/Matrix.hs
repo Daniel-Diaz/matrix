@@ -621,7 +621,7 @@ ref :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 ref mtx
         | nrows mtx == 1
             = clearedLeft
-        | otherwise = do 
+        | otherwise = do
                 (tl, tr, bl, br) <- (splitBlocks 1 1 <$> clearedLeft)
                 br' <- ref br
                 return  ((tl <|> tr) <-> (bl <|> br'))
@@ -633,7 +633,7 @@ ref mtx
             Nothing -> Left "Attempt to invert a non-invertible matrix"
             Just x -> return x
     normalizedFirstRow = (\sigAtTop' -> scaleRow (1 / getElem 1 1 sigAtTop') 1 sigAtTop') <$> sigAtTop
-    clearedLeft =  do 
+    clearedLeft =  do
             comb <- mapM combinator [2..nrows mtx]
             firstRow <- normalizedFirstRow
             return $ (foldr (.) id comb) firstRow
@@ -956,6 +956,9 @@ first f = go
 
 -- | Strassen's algorithm over square matrices of order @2^n@.
 strassen :: Num a => Matrix a -> Matrix a -> Matrix a
+{-# SPECIALIZE strassen :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE strassen :: Matrix Int -> Matrix Int -> Matrix Int #-}
+{-# SPECIALIZE strassen :: Matrix Rational -> Matrix Rational -> Matrix Rational #-}
 -- Trivial 1x1 multiplication.
 strassen a@(M 1 1 _ _ _ _) b@(M 1 1 _ _ _ _) = M 1 1 0 0 1 $ V.singleton $ (a ! (1,1)) * (b ! (1,1))
 -- General case guesses that the input matrices are square matrices
@@ -983,6 +986,9 @@ strassen a b = joinBlocks (c11,c12,c21,c22)
 
 -- | Strassen's matrix multiplication.
 multStrassen :: Num a => Matrix a -> Matrix a -> Matrix a
+{-# SPECIALIZE multStrassen :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE multStrassen :: Matrix Int -> Matrix Int -> Matrix Int #-}
+{-# SPECIALIZE multStrassen :: Matrix Rational -> Matrix Rational -> Matrix Rational #-}
 multStrassen a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
    | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
                     ++ sizeStr n' m' ++ " matrices."
