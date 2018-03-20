@@ -38,15 +38,18 @@ teststrU n = U.multStrassen (matU n) (matU n)
 --teststrmU n = U.multStrassenMixed (mat n) (mat n)
 
 
--- Note that Strassen tests are slower (by several orders of magnitude) than Definition tests,
--- for the matrix sizes tested here.
 bmat :: Int -> Benchmark
 bmat n = bgroup ("mult" ++ show n)
  [ bench "Definition" $ nf testdef n
  , bench "DefinitionU" $ nf testdefU n
  , bench "Definition 2" $ nf testdef2 n
- , bench "Strassen" $ nf teststr n
- , bench "StrassenU" $ nf teststrU n
+{-
+Strassen and StrassenU tests are commented out because they are consistentlty slower,
+by several orders of magnitude, than other tests, and use /much/ more memory,
+to the point that they prevent the benchmark from finishing when the matrix size is > 300.
+-}
+-- , bench "Strassen" $ nf teststr n
+-- , bench "StrassenU" $ nf teststrU n
  , bench "Strassen mixed" $ nf teststrm n
  ]
 
