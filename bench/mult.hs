@@ -26,23 +26,22 @@ matU n = U.fromList n n [1..]
 testdefU :: Int -> U.Matrix Int
 testdefU n = U.multStd (matU n) (matU n)
 
--- TODO add this test when U.multStd2 exists
---testdef2U :: Int -> U.Matrix Int
---testdef2U n = U.multStd2 (mat n) (mat n)
+testdef2U :: Int -> U.Matrix Int
+testdef2U n = U.multStd2 (matU n) (matU n)
 
 teststrU :: Int -> U.Matrix Int
 teststrU n = U.multStrassen (matU n) (matU n)
 
--- TODO add this test when U.multStrassenMixed exists
---teststrmU :: Int -> U.Matrix Int
---teststrmU n = U.multStrassenMixed (mat n) (mat n)
+teststrmU :: Int -> U.Matrix Int
+teststrmU n = U.multStrassenMixed (matU n) (matU n)
 
 
 bmat :: Int -> Benchmark
 bmat n = bgroup ("mult" ++ show n)
  [ bench "Definition" $ nf testdef n
- , bench "DefinitionU" $ nf testdefU n
+ , bench "Definition U" $ nf testdefU n
  , bench "Definition 2" $ nf testdef2 n
+ , bench "Definition 2 U" $ nf testdef2U n
 {-
 Strassen and StrassenU tests are commented out because they are consistentlty slower,
 by several orders of magnitude, than other tests, and use /much/ more memory,
@@ -51,6 +50,7 @@ to the point that they prevent the benchmark from finishing when the matrix size
 -- , bench "Strassen" $ nf teststr n
 -- , bench "StrassenU" $ nf teststrU n
  , bench "Strassen mixed" $ nf teststrm n
+ , bench "Strassen mixed U" $ nf teststrmU n
  ]
 
 main :: IO ()

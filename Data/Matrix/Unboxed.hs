@@ -46,7 +46,9 @@ module Data.Matrix.Unboxed (
 
     -- ** Functions
   , multStd
+  , multStd2
   , multStrassen
+  , multStrassenMixed
     -- * Linear transformations
   , scaleMatrix
   , scaleRow
@@ -70,7 +72,7 @@ import Prelude
 -- Classes
 import Control.DeepSeq
 import Control.Monad (forM_)
-import Control.Loop (numLoop)
+import Control.Loop (numLoop, numLoopFold)
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Semigroup as S
@@ -80,6 +82,7 @@ import GHC.Generics (Generic)
 import           Control.Monad.Primitive (PrimMonad, PrimState)
 import           Data.List               (maximumBy,foldl1')
 import           Data.Ord                (comparing)
+import qualified Data.Vector                     as BV
 import qualified Data.Vector.Unboxed             as V
 import qualified Data.Vector.Unboxed.Mutable     as MV
 import qualified Data.Matrix                     as Boxed -- Just needed for 'prettyMatrix'
@@ -746,8 +749,6 @@ splitBlocks i j a@(M n m _ _ _ _) =
 -- >   (tl <|> tr)
 -- >       <->
 -- >   (bl <|> br)
-{-# SPECIALIZE joinBlocks :: (Matrix Double, Matrix Double, Matrix Double, Matrix Double) -> Matrix Double #-}
-{-# SPECIALIZE joinBlocks :: (Matrix Int, Matrix Int, Matrix Int, Matrix Int) -> Matrix Int #-}
 joinBlocks :: V.Unbox a
            => (Matrix a,Matrix a,Matrix a,Matrix a) -> Matrix a
 {-# INLINE[1] joinBlocks #-}
@@ -782,8 +783,6 @@ joinBlocks (tl,tr,bl,br) =
 --
 -- Where both matrices /A/ and /B/ have the same number of rows.
 -- /This condition is not checked/.
-{-# SPECIALIZE (<|>) :: Matrix Double -> Matrix Double -> Matrix Double #-}
-{-# SPECIALIZE (<|>) :: Matrix Int -> Matrix Int -> Matrix Int #-}
 (<|>) :: V.Unbox a
       => Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<|>) #-}
@@ -800,8 +799,6 @@ m <|> m' =
 --
 -- Where both matrices /A/ and /B/ have the same number of columns.
 -- /This condition is not checked/.
-{-# SPECIALIZE (<->) :: Matrix Double -> Matrix Double -> Matrix Double #-}
-{-# SPECIALIZE (<->) :: Matrix Int -> Matrix Int -> Matrix Int #-}
 (<->) :: V.Unbox a
       => Matrix a -> Matrix a -> Matrix a
 {-# INLINE (<->) #-}
@@ -833,6 +830,18 @@ elementwiseUnsafe :: (V.Unbox a, V.Unbox b, V.Unbox c)
 {-# INLINE elementwiseUnsafe #-}
 elementwiseUnsafe f m m' = matrix (nrows m) (ncols m) $
   \(i,j) -> f (unsafeGet i j m) (unsafeGet i j m')
+
+infixl 6 +., -.
+
+-- | Internal unsafe addition.
+(+.) :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# INLINE (+.) #-}
+(+.) = elementwiseUnsafe (+)
+
+-- | Internal unsafe substraction.
+(-.) :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# INLINE (-.) #-}
+(-.) = elementwiseUnsafe (-)
 
 
 -------------------------------------------------------
@@ -885,6 +894,15 @@ multStd a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
                     ++ sizeStr n' m' ++ " matrices."
    | otherwise = multStd_ a1 a2
 
+-- | Standard matrix multiplication by definition.
+multStd2 :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# INLINE multStd2 #-}
+multStd2 a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
+   -- Checking that sizes match...
+   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
+                    ++ sizeStr n' m' ++ " matrices."
+   | otherwise = multStd__ a1 a2
+
 -- | Standard matrix multiplication by definition, without checking if sizes match.
 multStd_ :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
 {-# INLINE multStd_ #-}
@@ -917,6 +935,20 @@ multStd_ a@(M 3 3 _ _ _ _) b@(M 3 3 _ _ _ _) =
          , a31*b11 + a32*b21 + a33*b31 , a31*b12 + a32*b22 + a33*b32 , a31*b13 + a32*b23 + a33*b33
            ]
 multStd_ a@(M n m _ _ _ _) b@(M _ m' _ _ _ _) = matrix n m' $ \(i,j) -> sum [ a !. (i,k) * b !. (k,j) | k <- [1 .. m] ]
+
+multStd__ :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# INLINE multStd__ #-}
+multStd__ a b = matrix r c $ \(i,j) -> dotProduct (BV.unsafeIndex avs $ i - 1) (BV.unsafeIndex bvs $ j - 1)
+  where
+    r = nrows a
+    avs = BV.generate r $ \i -> getRow (i+1) a
+    c = ncols b
+    bvs = BV.generate c $ \i -> getCol (i+1) b
+
+dotProduct :: (Num a, V.Unbox a) => V.Vector a -> V.Vector a -> a
+{-# INLINE dotProduct #-}
+dotProduct v1 v2 = numLoopFold 0 (V.length v1 - 1) 0 $
+  \r i -> V.unsafeIndex v1 i * V.unsafeIndex v2 i + r
 
 {-
 dotProduct v1 v2 = go (V.length v1 - 1) 0
@@ -973,6 +1005,96 @@ multStrassen a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
            b1 = setSize 0 n2 n2 a1
            b2 = setSize 0 n2 n2 a2
        in  submatrix 1 n 1 m' $ strassen b1 b2
+
+
+strmixFactor :: Int
+strmixFactor = 300
+
+-- | Strassen's mixed algorithm.
+strassenMixed :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# SPECIALIZE strassenMixed :: Matrix Double -> Matrix Double -> Matrix Double #-}
+{-# SPECIALIZE strassenMixed :: Matrix Int -> Matrix Int -> Matrix Int #-}
+strassenMixed a b
+ | r < strmixFactor = multStd__ a b
+ | odd r = let r' = r + 1
+               a' = setSize 0 r' r' a
+               b' = setSize 0 r' r' b
+           in  submatrix 1 r 1 r $ strassenMixed a' b'
+ | otherwise =
+      M r r 0 0 r $ V.create $ do
+         v <- MV.unsafeNew (r*r)
+         let en = encode r
+             n' = n + 1
+         -- c11 = p1 + p4 - p5 + p7
+         sequence_ [ MV.write v k $
+                         unsafeGet i j p1
+                       + unsafeGet i j p4
+                       - unsafeGet i j p5
+                       + unsafeGet i j p7
+                   | i <- [1..n]
+                   , j <- [1..n]
+                   , let k = en (i,j)
+                     ]
+         -- c12 = p3 + p5
+         sequence_ [ MV.write v k $
+                         unsafeGet i j' p3
+                       + unsafeGet i j' p5
+                   | i <- [1..n]
+                   , j <- [n'..r]
+                   , let k = en (i,j)
+                   , let j' = j - n
+                     ]
+         -- c21 = p2 + p4
+         sequence_ [ MV.write v k $
+                         unsafeGet i' j p2
+                       + unsafeGet i' j p4
+                   | i <- [n'..r]
+                   , j <- [1..n]
+                   , let k = en (i,j)
+                   , let i' = i - n
+                     ]
+         -- c22 = p1 - p2 + p3 + p6
+         sequence_ [ MV.write v k $
+                         unsafeGet i' j' p1
+                       - unsafeGet i' j' p2
+                       + unsafeGet i' j' p3
+                       + unsafeGet i' j' p6
+                   | i <- [n'..r]
+                   , j <- [n'..r]
+                   , let k = en (i,j)
+                   , let i' = i - n
+                   , let j' = j - n
+                     ]
+         return v
+ where
+  r = nrows a
+  -- Size of the subproblem is halved.
+  n = quot r 2
+  -- Split of the original problem into smaller subproblems.
+  (a11,a12,a21,a22) = splitBlocks n n a
+  (b11,b12,b21,b22) = splitBlocks n n b
+  -- The seven Strassen's products.
+  p1 = strassenMixed (a11 +. a22) (b11 +. b22)
+  p2 = strassenMixed (a21 +. a22)  b11
+  p3 = strassenMixed  a11         (b12 -. b22)
+  p4 = strassenMixed         a22  (b21 -. b11)
+  p5 = strassenMixed (a11 +. a12)         b22
+  p6 = strassenMixed (a21 -. a11) (b11 +. b12)
+  p7 = strassenMixed (a12 -. a22) (b21 +. b22)
+
+-- | Mixed Strassen's matrix multiplication.
+multStrassenMixed :: (Num a, V.Unbox a) => Matrix a -> Matrix a -> Matrix a
+{-# INLINE multStrassenMixed #-}
+multStrassenMixed a1@(M n m _ _ _ _) a2@(M n' m' _ _ _ _)
+   | m /= n' = error $ "Multiplication of " ++ sizeStr n m ++ " and "
+                    ++ sizeStr n' m' ++ " matrices."
+   | n < strmixFactor = multStd__ a1 a2
+   | otherwise =
+       let mx = maximum [n,m,n',m']
+           n2 = if even mx then mx else mx+1
+           b1 = setSize 0 n2 n2 a1
+           b2 = setSize 0 n2 n2 a2
+       in  submatrix 1 n 1 m' $ strassenMixed b1 b2
 
 -------------------------------------------------------
 -------------------------------------------------------
