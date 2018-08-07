@@ -30,7 +30,7 @@ module Data.Matrix (
   , setElem
   , unsafeSet
   , transpose , setSize , extendTo
-  , inverse, rref
+  , inverse, rref, rref'
   , mapRow , mapCol, mapPos
     -- * Submatrices
     -- ** Splitting blocks
@@ -83,7 +83,7 @@ import Control.Applicative(Applicative, (<$>), (<*>), pure)
 import GHC.Generics (Generic)
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
-import           Data.List               (maximumBy,foldl1')
+import           Data.List               (maximumBy,foldl1',find)
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
@@ -585,6 +585,50 @@ inverse m
             adjoinedWId = m <|> identity (nrows m)
             rref'd = rref adjoinedWId
         in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
+
+
+-- | Reduced row echelon form. Taken from rosettacode. This is not the
+--   implementation provided by the 'matrix' package.
+--   https://rosettacode.org/wiki/Reduced_row_echelon_form#Haskell
+rref' :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
+rref' m
+        | ncols m < nrows m
+            = Left $
+                "Invalid dimensions "
+                    ++ show (sizeStr (ncols m) (nrows m))
+        | otherwise = Right . fromLists $ f matM 0 [0 .. rows - 1]
+  where
+    matM = toLists m
+    rows = nrows m
+    cols = ncols m
+
+    f a _    []           = a
+    f a lead (r : rs)
+      | isNothing indices = a
+      | otherwise         = f a' (lead' + 1) rs
+      where
+        indices = find p l
+        p (col, row) = a !! row !! col /= 0
+        l = [(col, row) |
+            col <- [lead .. cols - 1],
+            row <- [r .. rows - 1]]
+
+        Just (lead', i) = indices
+        newRow = map (/ a !! i !! lead') $ a !! i
+
+        a' = zipWith g [0..] $
+            replace r newRow $
+            replace i (a !! r) a
+        g n row
+            | n == r    = row
+            | otherwise = zipWith h newRow row
+              where h = subtract . (* row !! lead')
+
+        replace :: Int -> b -> [b] -> [b]
+        {- Replaces the element at the given index. -}
+        replace n e t = a ++ e : b
+          where (a, _ : b) = splitAt n t
+
 
 -- | /O(rows*rows*cols*cols)/. Converts a matrix to reduced row echelon form, thus
 --  solving a linear system of equations. This requires that (cols > rows)
