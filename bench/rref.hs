@@ -19,4 +19,4 @@ brref n = bgroup ("rref" ++ show n)
  ]
 
 main :: IO ()
-main = defaultMain $ fmap brref [10,25,100,150,250,400,500]
+main = defaultMain $ fmap brref [10,25,100]

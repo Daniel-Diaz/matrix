@@ -67,6 +67,13 @@ Test-Suite matrix-test
                , QuickCheck
                , tasty-quickcheck
 
+Test-Suite matrix-rref-test
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: RRef.hs
+  build-depends: base == 4.*
+               , matrix
+
 Test-Suite matrix-examples
   type: exitcode-stdio-1.0
   hs-source-dirs: test
