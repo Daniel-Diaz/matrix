@@ -17,6 +17,10 @@
 #  location: "./custom-snapshot.yaml"
 resolver: lts-7.0
 
+nix:
+    packages:
+      - gmp
+
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 # 

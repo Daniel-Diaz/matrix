@@ -1,5 +1,6 @@
 
 import Data.Matrix
+import Data.Ratio
 import System.Exit (exitFailure)
 import System.IO (hFlush,stdout)
 import Data.Either (isLeft)
@@ -140,4 +141,32 @@ main = sequence_
       , Right $ fromList 3 3 [1,0,0, 0,0,1, 0,1,0] :: Either String (Matrix Rational))
   , testExample "inverse (6)" $ isLeft $ inverse $ fromList 2 2 [1,1,2,2]
   , testEquality "inverse (7)" ( inverse $ fromList 3 3 [0,0,0, 0,0,0, 0,0,0 :: Double], Left "Attempt to invert a non-invertible matrix")
-    ]
+  , testEquality "rref (bug #42)"
+      ( rref (fromList 9 10
+                [-1,1,0,0,0,0,0,0,1,1
+                ,1,-1,0,0,0,0,1,0,1,1
+                ,1,1,-1,0,0,0,0,1,0,1
+                ,0,0,1,-1,0,0,0,0,0,1
+                ,0,0,0,1,-1,1,0,0,0,1
+                ,0,0,0,0,0,-1,1,0,0,1
+                ,0,0,0,0,0,0,-1,0,1,1
+                ,0,0,0,0,0,0,0,-1,0,1
+                ,0,0,0,0,0,0,0,0,-1,1
+                ] :: Matrix Rational)
+      , Right (fromList 9 10
+        [1,0,0,0,(-1)%2,0,0,0,0,0
+        ,0,1,0,0,(-1)%2,0,0,0,0,0
+        ,0,0,1,0,-1,0,0,0,0,0
+        ,0,0,0,1,-1,0,0,0,0,0
+        ,0,0,0,0,0,1,0,0,0,0
+        ,0,0,0,0,0,0,1,0,0,0
+        ,0,0,0,0,0,0,0,1,0,0
+        ,0,0,0,0,0,0,0,0,1,0
+        ,0,0,0,0,0,0,0,0,0,1
+        ] :: Matrix Rational)
+      )
+  , testEquality "rref (bug #52)"
+      ( rref $ fromList 2 3 [1,2,3,2,4,6]
+      , Right $ fromList 2 3 [1,2,3,0,0,0]
+      )
+  ]

@@ -47,6 +47,16 @@ Benchmark matrix-mult
                , criterion
   ghc-options: -O2 -fstatic-argument-transformation
 
+
+Benchmark matrix-rref
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: rref.hs
+  build-depends: base == 4.*
+               , matrix
+               , criterion
+  ghc-options: -O2 -fstatic-argument-transformation
+
 Test-Suite matrix-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test

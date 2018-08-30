@@ -83,7 +83,7 @@ import Control.Applicative(Applicative, (<$>), (<*>), pure)
 import GHC.Generics (Generic)
 -- Data
 import           Control.Monad.Primitive (PrimMonad, PrimState)
-import           Data.List               (maximumBy,foldl1')
+import           Data.List               (maximumBy,foldl1',find)
 import           Data.Ord                (comparing)
 import qualified Data.Vector             as V
 import qualified Data.Vector.Mutable     as MV
@@ -584,61 +584,60 @@ inverse m
         let
             adjoinedWId = m <|> identity (nrows m)
             rref'd = rref adjoinedWId
-        in rref'd >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
+            checkInvertible a = if unsafeGet (ncols m) (nrows m) a == 1
+                then Right a
+                else Left "Attempt to invert a non-invertible matrix"
+        in rref'd >>= checkInvertible >>= return . submatrix 1 (nrows m) (ncols m + 1) (ncols m * 2)
 
--- | /O(rows*rows*cols*cols)/. Converts a matrix to reduced row echelon form, thus
---  solving a linear system of equations. This requires that (cols > rows)
---  if cols < rows, then there are fewer variables than equations and the
---  problem cannot be solved consistently. If rows = cols, then it is
---  basically a homogenous system of equations, so it will be reduced to
---  identity or an error depending on whether the marix is invertible
---  (this case is allowed for robustness).
+
+-- | Converts a matrix to reduced row echelon form, thus
+--   solving a linear system of equations. This requires that (cols > rows)
+--   if cols < rows, then there are fewer variables than equations and the
+--   problem cannot be solved consistently. If rows = cols, then it is
+--   basically a homogenous system of equations, so it will be reduced to
+--   identity or an error depending on whether the marix is invertible
+--   (this case is allowed for robustness).
+--   This implementation is taken from rosettacode
+--   https://rosettacode.org/wiki/Reduced_row_echelon_form#Haskell
 rref :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
 rref m
         | ncols m < nrows m
             = Left $
                 "Invalid dimensions "
                     ++ show (sizeStr (ncols m) (nrows m))
-                    ++ "; the number of columns must be greater than or equal to the number of rows"
-        | otherwise             = rrefRefd =<< (ref m)
-    where
-    rrefRefd mtx
-        | nrows mtx == 1    = Right mtx
-        | otherwise =
-            let
-                -- this is super-slow: [resolvedRight] is cubic because [combineRows] is quadratic
-                resolvedRight = foldr (.) id (map resolveRow [1..col-1]) mtx
-                    where
-                    col = nrows mtx
-                    resolveRow n = combineRows n (-getElem n col mtx) col
-                top = submatrix 1 (nrows resolvedRight - 1) 1 (ncols resolvedRight) resolvedRight
-                top' = rrefRefd top
-                bot = submatrix (nrows resolvedRight) (nrows resolvedRight) 1 (ncols resolvedRight) resolvedRight
-            in top' >>= return . (<-> bot)
+        | otherwise = Right . fromLists $ f matM 0 [0 .. rows - 1]
+  where
+    matM = toLists m
+    rows = nrows m
+    cols = ncols m
 
+    f a _    []           = a
+    f a lead (r : rs)
+      | isNothing indices = a
+      | otherwise         = f a' (lead' + 1) rs
+      where
+        indices = find p l
+        p (col, row) = a !! row !! col /= 0
+        l = [(col, row) |
+            col <- [lead .. cols - 1],
+            row <- [r .. rows - 1]]
 
-ref :: (Fractional a, Eq a) => Matrix a -> Either String (Matrix a)
-ref mtx
-        | nrows mtx == 1
-            = clearedLeft
-        | otherwise = do 
-                (tl, tr, bl, br) <- (splitBlocks 1 1 <$> clearedLeft)
-                br' <- ref br
-                return  ((tl <|> tr) <-> (bl <|> br'))
-    where
-    sigAtTop = (\row -> switchRows 1 row mtx) <$> goodRow
-        where
-        significantRow n = getElem n 1 mtx /= 0
-        goodRow = case listToMaybe (filter significantRow [1..nrows mtx]) of
-            Nothing -> Left "Attempt to invert a non-invertible matrix"
-            Just x -> return x
-    normalizedFirstRow = (\sigAtTop' -> scaleRow (1 / getElem 1 1 sigAtTop') 1 sigAtTop') <$> sigAtTop
-    clearedLeft =  do 
-            comb <- mapM combinator [2..nrows mtx]
-            firstRow <- normalizedFirstRow
-            return $ (foldr (.) id comb) firstRow
-        where
-        combinator n = (\normalizedFirstRow'  ->combineRows n (-getElem n 1 normalizedFirstRow') 1) <$> normalizedFirstRow
+        Just (lead', i) = indices
+        newRow = map (/ a !! i !! lead') $ a !! i
+
+        a' = zipWith g [0..] $
+            replace r newRow $
+            replace i (a !! r) a
+        g n row
+            | n == r    = row
+            | otherwise = zipWith h newRow row
+              where h = subtract . (* row !! lead')
+
+        replace :: Int -> b -> [b] -> [b]
+        {- Replaces the element at the given index. -}
+        replace n e t = a ++ e : b
+          where (a, _ : b) = splitAt n t
+
 
 -- | Extend a matrix to a given size adding a default element.
 --   If the matrix already has the required size, nothing happens.
