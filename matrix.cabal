@@ -36,7 +36,7 @@ Library
                , semigroups >= 0.9
                , loop >= 0.2
   Exposed-modules: Data.Matrix
-  GHC-Options: -Wall -O2 -fstatic-argument-transformation
+  GHC-Options: -Wall -O2 -fstatic-argument-transformation -fPIC
 
 Benchmark matrix-mult
   type: exitcode-stdio-1.0
