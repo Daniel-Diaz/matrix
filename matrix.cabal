@@ -1,5 +1,5 @@
 Name: matrix
-Version: 0.3.6.1
+Version: 0.3.6.2
 Author: Daniel Díaz
 Category: Math
 Build-type: Simple
@@ -19,24 +19,21 @@ Description:
   If you want to use GSL, BLAS and LAPACK, @hmatrix@ (<http://hackage.haskell.org/package/hmatrix>)
   is the way to go.
 Cabal-version: >= 1.8
-Extra-source-files:
-  readme.md
-  -- Benchmarks
-  bench/mult.hs
+Extra-source-files: readme.md
 
 Source-repository head
   type: git
   location: git://github.com/Daniel-Diaz/matrix.git
 
 Library
-  Build-depends: base >= 4.5 && < 5
+  build-depends: base >= 4.5 && < 5
                , vector >= 0.10
                , deepseq >= 1.3.0.0 && < 1.5
                , primitive >= 0.5
                , semigroups >= 0.9
                , loop >= 0.2
-  Exposed-modules: Data.Matrix
-  GHC-Options: -Wall -O2 -fstatic-argument-transformation -fPIC
+  exposed-modules: Data.Matrix
+  ghc-options: -Wall -O2 -fstatic-argument-transformation
 
 Benchmark matrix-mult
   type: exitcode-stdio-1.0
