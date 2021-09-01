@@ -339,7 +339,9 @@ fromList :: Int -- ^ Rows
          -> [a] -- ^ List of elements
          -> Matrix a
 {-# INLINE fromList #-}
-fromList n m = M n m 0 0 m . V.fromListN (n*m)
+fromList n m xs
+    | n*m > (1+length xs) = error $ "fromList: The list argument must have at least rows*cols elements. (" ++ (sizeStr n m) ++ ")"
+    | otherwise           = M n m 0 0 m $ V.fromListN (n*m) xs
 
 -- | Get the elements of a matrix stored in a list.
 --
