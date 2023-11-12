@@ -1,9 +1,10 @@
+Cabal-version: 3.4
 Name: matrix
 Version: 0.3.6.2
 Author: Daniel Casanueva
 Category: Math
 Build-type: Simple
-License: BSD3
+License: BSD-3-Clause
 License-file: license
 Maintainer: Daniel Casanueva (daniel.casanueva `at` proton.me)
 Bug-reports: https://github.com/Daniel-Diaz/matrix/issues
@@ -15,7 +16,6 @@ Description:
   .
   If you want to use GSL, BLAS and LAPACK, @hmatrix@ (<http://hackage.haskell.org/package/hmatrix>)
   is the way to go.
-Cabal-version: >= 1.8
 Extra-doc-files: readme.md, changelog.md
 
 Source-repository head
